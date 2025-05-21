@@ -1,28 +1,47 @@
 import express from 'express';
 import cors from 'cors';
-import helmet from 'helmet';
 import mongoose from 'mongoose';
 import { config } from './config/index.js';
 import { logger } from './utils/logger.js';
 import { authRoutes } from './routes/auth.routes.js';
 import { leadRoutes } from './routes/lead.routes.js';
+import { uploadRoutes } from './routes/upload.routes.js';
+import { 
+  securityHeaders, 
+  corsOptions, 
+  requestSizeLimiter,
+  sqlInjectionProtection,
+  ipFilter,
+  sanitizeRequest
+} from './middleware/security.middleware.js';
 import { apiLimiter, authLimiter } from './middleware/rateLimiter.middleware.js';
 import { errorHandler, notFound } from './middleware/error.middleware.js';
+import { auditMiddleware } from './middleware/audit.middleware.js';
+import { metricsMiddleware } from './middleware/metrics.middleware.js';
+import { cacheMiddleware } from './middleware/cache.middleware.js';
 import { kafkaService } from './services/kafka.service.js';
 
 const app = express();
 
 // Security middleware
-app.use(helmet());
-app.use(cors({
-  origin: config.app.url,
-  credentials: true,
-}));
+app.use(ipFilter);
+app.use(securityHeaders);
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '10kb' }));
+app.use(requestSizeLimiter);
+app.use(sqlInjectionProtection);
+app.use(sanitizeRequest);
+
+// Monitoring middleware
+app.use(auditMiddleware);
+app.use(metricsMiddleware);
 
 // Rate limiting
 app.use('/api/', apiLimiter);
 app.use('/api/auth', authLimiter);
+
+// Cache middleware for GET requests
+app.use(cacheMiddleware());
 
 // Connect to MongoDB
 mongoose.connect(config.mongoUri)
@@ -32,12 +51,16 @@ mongoose.connect(config.mongoUri)
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/leads', leadRoutes);
+app.use('/api/upload', uploadRoutes);
 
+// Health check endpoint with enhanced metrics
 app.get('/health', (req, res) => {
+  const metrics = getMetrics();
   res.json({ 
     status: 'ok', 
     environment: config.env,
-    kafka: config.kafka.enabled ? 'enabled' : 'disabled'
+    kafka: config.kafka.enabled ? 'enabled' : 'disabled',
+    metrics
   });
 });
 
@@ -72,4 +95,16 @@ process.on('SIGTERM', async () => {
     
     process.exit(0);
   });
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  logger.error({ error }, 'Uncaught exception');
+  process.exit(1);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (error) => {
+  logger.error({ error }, 'Unhandled rejection');
+  process.exit(1);
 });

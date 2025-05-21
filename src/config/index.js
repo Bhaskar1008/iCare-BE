@@ -9,9 +9,14 @@ export const config = {
   env: environment,
   port: parseInt(process.env.PORT || '3000', 10),
   mongoUri: process.env.MONGODB_URI,
+  app: {
+    url: process.env.APP_URL || 'http://localhost:3000',
+  },
   jwt: {
     secret: process.env.JWT_SECRET,
     expiresIn: process.env.JWT_EXPIRES_IN || '1d',
+    refreshSecret: process.env.JWT_REFRESH_SECRET,
+    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   },
   smtp: {
     host: process.env.SMTP_HOST,
@@ -28,15 +33,16 @@ export const config = {
     authToken: process.env.TWILIO_AUTH_TOKEN,
     from: process.env.SMS_FROM,
   },
-  app: {
-    url: process.env.APP_URL || 'http://localhost:3000',
-  },
-  company: {
-    name: 'iCare',
-  },
-  support: {
-    email: 'support@icare.com',
-    phone: '+1234567890',
+  security: {
+    apiKey: process.env.API_KEY,
+    blacklistedIPs: process.env.BLACKLISTED_IPS?.split(',') || [],
+    rateLimiting: {
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: parseInt(process.env.RATE_LIMIT_MAX || '100'),
+    },
+    bcrypt: {
+      saltRounds: parseInt(process.env.BCRYPT_SALT_ROUNDS || '12'),
+    },
   },
   kafka: {
     enabled: process.env.KAFKA_ENABLED === 'true',
@@ -69,5 +75,12 @@ export const config = {
   logging: {
     level: process.env.LOG_LEVEL || 'info',
     prettyPrint: environment === 'development',
+  },
+  company: {
+    name: 'iCare',
+  },
+  support: {
+    email: 'support@icare.com',
+    phone: '+1234567890',
   },
 };
