@@ -24,9 +24,47 @@ export const config = {
     from: process.env.SMTP_FROM,
   },
   sms: {
-    apiKey: process.env.SMS_API_KEY,
-    apiSecret: process.env.SMS_API_SECRET,
+    accountSid: process.env.TWILIO_ACCOUNT_SID,
+    authToken: process.env.TWILIO_AUTH_TOKEN,
     from: process.env.SMS_FROM,
+  },
+  app: {
+    url: process.env.APP_URL || 'http://localhost:3000',
+  },
+  company: {
+    name: 'iCare',
+  },
+  support: {
+    email: 'support@icare.com',
+    phone: '+1234567890',
+  },
+  kafka: {
+    enabled: process.env.KAFKA_ENABLED === 'true',
+    brokers: process.env.KAFKA_BROKERS?.split(',') || ['localhost:9092'],
+    clientId: process.env.KAFKA_CLIENT_ID || 'icare-service',
+    groupId: process.env.KAFKA_GROUP_ID || 'icare-group',
+  },
+  aws: {
+    region: process.env.AWS_REGION,
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    },
+    s3: {
+      bucket: process.env.AWS_S3_BUCKET,
+      url: process.env.AWS_S3_URL,
+    },
+  },
+  upload: {
+    maxSize: 5 * 1024 * 1024, // 5MB
+    allowedTypes: [
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ],
   },
   logging: {
     level: process.env.LOG_LEVEL || 'info',

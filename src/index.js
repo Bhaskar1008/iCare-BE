@@ -2,24 +2,27 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import mongoose from 'mongoose';
-import { rateLimit } from 'express-rate-limit';
 import { config } from './config/index.js';
 import { logger } from './utils/logger.js';
 import { authRoutes } from './routes/auth.routes.js';
+import { leadRoutes } from './routes/lead.routes.js';
+import { apiLimiter, authLimiter } from './middleware/rateLimiter.middleware.js';
+import { errorHandler, notFound } from './middleware/error.middleware.js';
+import { kafkaService } from './services/kafka.service.js';
 
 const app = express();
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
-});
-
-// Middleware
+// Security middleware
 app.use(helmet());
-app.use(cors());
-app.use(express.json());
-app.use(limiter);
+app.use(cors({
+  origin: config.app.url,
+  credentials: true,
+}));
+app.use(express.json({ limit: '10kb' }));
+
+// Rate limiting
+app.use('/api/', apiLimiter);
+app.use('/api/auth', authLimiter);
 
 // Connect to MongoDB
 mongoose.connect(config.mongoUri)
@@ -28,18 +31,45 @@ mongoose.connect(config.mongoUri)
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/leads', leadRoutes);
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', environment: config.env });
+  res.json({ 
+    status: 'ok', 
+    environment: config.env,
+    kafka: config.kafka.enabled ? 'enabled' : 'disabled'
+  });
 });
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  logger.error({ err }, 'Unhandled error');
-  res.status(500).json({ message: 'Internal server error' });
-});
+// Error handling
+app.use(notFound);
+app.use(errorHandler);
 
 // Start server
-app.listen(config.port, () => {
-  logger.info({ port: config.port, env: config.env }, 'Server started');
+const server = app.listen(config.port, () => {
+  logger.info({ 
+    port: config.port, 
+    env: config.env,
+    kafka: config.kafka.enabled ? 'enabled' : 'disabled'
+  }, 'Server started');
+});
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  logger.info('SIGTERM received. Starting graceful shutdown...');
+  
+  server.close(async () => {
+    logger.info('HTTP server closed');
+    
+    // Disconnect from Kafka if enabled
+    if (config.kafka.enabled) {
+      await kafkaService.disconnect();
+    }
+    
+    // Disconnect from MongoDB
+    await mongoose.disconnect();
+    logger.info('MongoDB disconnected');
+    
+    process.exit(0);
+  });
 });
