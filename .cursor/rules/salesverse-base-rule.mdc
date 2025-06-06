@@ -1,0 +1,280 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Salesverse Backend - Cursor Rules
+
+## Project Structure & Architecture Rules
+
+### 1. Folder Structure Enforcement
+Follow the established folder structure strictly:
+
+```
+src/
+├── app.ts                     # Main application class
+├── index.ts                   # Entry point
+├── common/                    # Shared utilities and components
+│   ├── constants/             # Application constants
+│   ├── dto/                   # Data Transfer Objects
+│   ├── enums/                 # Enumerations
+│   ├── exceptions/            # Custom exceptions
+│   ├── guards/                # Route guards
+│   ├── interfaces/            # Shared interfaces
+│   ├── middleware/            # Shared middleware
+│   ├── pipes/                 # Validation pipes
+│   ├── schemas/               # Validation schemas
+│   └── utils/                 # Utility functions
+├── config/                    # Configuration files
+├── controllers/               # Base controllers
+├── database/                  # Database configuration
+├── interfaces/                # Application interfaces
+├── middleware/                # Application middleware
+├── models/                    # Database models
+├── modules/                   # Feature modules
+│   └── [feature]/             # Feature-specific folders
+│       ├── dto/               # Feature DTOs
+│       ├── [feature].controller.ts
+│       ├── [feature].service.ts
+│       ├── [feature].repository.ts
+│       └── [feature].routes.ts
+├── providers/                 # Service providers
+├── services/                  # Base services
+└── validations/               # Validation schemas
+```
+
+### 2. File Naming Conventions
+- Use kebab-case for file names: `user-profile.service.ts`
+- Use PascalCase for classes: `UserProfileService`
+- Use camelCase for functions and variables: `getUserProfile`
+- Use SCREAMING_SNAKE_CASE for constants: `HTTP_STATUS_CODES`
+- File suffixes must match their purpose:
+  - `.controller.ts` for controllers
+  - `.service.ts` for services
+  - `.repository.ts` for repositories
+  - `.model.ts` for models
+  - `.interface.ts` for interfaces
+  - `.dto.ts` for DTOs
+  - `.routes.ts` for routes
+  - `.middleware.ts` for middleware
+  - `.guard.ts` for guards
+  - `.pipe.ts` for pipes
+  - `.exception.ts` for exceptions
+
+### 3. SOLID Principles Enforcement
+
+#### Single Responsibility Principle (SRP)
+- Each class should have only one reason to change
+- Controllers should only handle HTTP requests/responses
+- Services should contain business logic only
+- Repositories should handle data access only
+- Models should only define data structure
+- Each file should export only one primary class/function
+
+#### Open/Closed Principle (OCP)
+- Use abstract base classes for extensibility
+- Implement interfaces for contracts
+- Use dependency injection for loose coupling
+- Create extension points through interfaces
+
+#### Liskov Substitution Principle (LSP)
+- Derived classes must be substitutable for base classes
+- Interfaces must be properly implemented
+- Type contracts must be maintained
+
+#### Interface Segregation Principle (ISP)
+- Create specific interfaces rather than large ones
+- Split large interfaces into smaller, focused ones
+- Don't force classes to depend on interfaces they don't use
+
+#### Dependency Inversion Principle (DIP)
+- Depend on abstractions, not concretions
+- Use dependency injection containers
+- Inject dependencies through constructors
+- Use interfaces for dependencies
+
+### 4. TypeScript Best Practices
+
+#### Type Safety
+- Always use explicit types for function parameters and return values
+- Use type imports with `import type` syntax
+- Prefer `interface` over `type` for object shapes
+- Use generics for reusable components
+- Avoid `any` type - use `unknown` or specific types
+
+#### Import/Export Rules
+- Use absolute imports with `@/` prefix for src folder
+- Group imports: external libraries first, then internal modules
+- Use named exports over default exports
+- Use consistent import ordering
+
+#### Code Organization
+- Keep functions under 50 lines (enforced by ESLint)
+- Keep complexity under 10 (enforced by ESLint)
+- Use descriptive variable and function names
+- Avoid magic numbers (use named constants)
+
+### 5. Module Structure Rules
+
+Each feature module must follow this structure:
+```
+modules/[feature]/
+├── dto/
+│   ├── create-[feature].dto.ts
+│   ├── update-[feature].dto.ts
+│   └── [feature]-response.dto.ts
+├── [feature].controller.ts
+├── [feature].service.ts
+├── [feature].repository.ts
+├── [feature].routes.ts
+└── interfaces/
+    └── [feature].interface.ts
+```
+
+### 6. Layer Architecture Rules
+
+#### Controller Layer
+- Only handle HTTP request/response
+- Validate input using DTOs
+- Delegate business logic to services
+- Handle error responses appropriately
+- Use dependency injection for services
+
+#### Service Layer
+- Contain all business logic
+- Be stateless and testable
+- Use repositories for data access
+- Handle business rule validation
+- Return appropriate data structures
+
+#### Repository Layer
+- Handle database operations only
+- Implement repository interfaces
+- Use query builders or ORM properly
+- Handle database-specific errors
+- Return domain models
+
+#### Model Layer
+- Define data structure only
+- Use proper TypeScript types
+- Include validation decorators
+- Define relationships clearly
+
+### 7. Error Handling Rules
+
+#### Custom Exceptions
+- Create specific exception classes in `common/exceptions/`
+- Extend base Exception class
+- Include proper error codes and messages
+- Use proper HTTP status codes
+
+#### Error Middleware
+- Centralize error handling in middleware
+- Log errors appropriately
+- Return consistent error responses
+- Don't expose internal details
+
+### 8. Security Rules
+
+#### Input Validation
+- Validate all inputs using DTOs
+- Use validation pipes
+- Sanitize user inputs
+- Implement rate limiting
+
+#### Authentication & Authorization
+- Use guards for route protection
+- Implement proper JWT handling
+- Use role-based access control
+- Validate permissions at service level
+
+### 9. Database Rules
+
+#### Models
+- Define models in `models/` directory
+- Use proper data types
+- Define relationships clearly
+- Include timestamps
+
+#### Repositories
+- Implement repository pattern
+- Use dependency injection
+- Handle database errors
+- Use transactions for complex operations
+
+### 10. Testing Rules
+
+#### File Structure
+- Place test files adjacent to source files
+- Use `.test.ts` or `.spec.ts` suffix
+- Group tests by feature modules
+- Create test utilities in `test/` directory
+
+#### Test Categories
+- Unit tests for individual functions/classes
+- Integration tests for module interactions
+- E2E tests for complete workflows
+
+### 11. Code Quality Rules
+
+#### Documentation
+- Use JSDoc for public methods
+- Document complex business logic
+- Maintain README files for modules
+- Document API endpoints
+
+#### Performance
+- Use proper caching strategies
+- Implement pagination for large datasets
+- Use database indexes appropriately
+- Monitor and log performance metrics
+
+#### Logging
+- Use structured logging
+- Include correlation IDs
+- Log at appropriate levels
+- Don't log sensitive information
+
+### 12. Git & Development Rules
+
+#### Commit Messages
+- Use conventional commits format
+- Include feature/module name in commits
+- Write descriptive commit messages
+
+#### Branch Naming
+- Use feature/[feature-name] for features
+- Use fix/[issue-description] for fixes
+- Use refactor/[area] for refactoring
+
+### 13. Configuration Rules
+
+#### Environment Variables
+- Use proper environment validation
+- Group configurations by feature
+- Use default values appropriately
+- Document all environment variables
+
+#### Secrets Management
+- Never commit secrets to version control
+- Use environment variables for secrets
+- Implement proper secret rotation
+- Use secure storage for production
+
+## Enforcement Guidelines
+
+1. **Before creating any new file**: Verify it follows the naming convention and is placed in the correct directory
+2. **Before writing any class**: Ensure it follows SOLID principles and has a single responsibility
+3. **Before implementing any feature**: Create proper interfaces and DTOs first
+4. **Before committing code**: Run linter and ensure all tests pass
+5. **When reviewing code**: Check for adherence to these rules and architectural patterns
+
+## ESLint Integration
+
+These rules complement the existing ESLint configuration:
+- TypeScript strict mode enabled
+- Consistent import styles enforced
+- Code complexity limits enforced
+- Proper error handling required
+
+- No console.log in production code 
