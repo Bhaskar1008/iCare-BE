@@ -24,6 +24,27 @@ export class UserRepository extends BaseRepository<IUser> {
     }
   }
 
+  public async findByAgentCode(
+    agentCode: string,
+    includeOtp = false,
+  ): Promise<IUser | null> {
+    try {
+      logger.debug('Finding user by agent code', { agentCode, includeOtp });
+      const user = await this.findOne(
+        {
+          agentCode,
+          isDeleted: { $ne: true },
+        },
+        includeOtp ? '+otp' : undefined,
+      );
+      logger.debug('User found by agent code', { agentCode, found: !!user });
+      return user;
+    } catch (error) {
+      logger.error('Failed to find user by agent code:', { error, agentCode });
+      throw error;
+    }
+  }
+
   public async findActiveUsers(
     limit: number = 100,
     skip: number = 0,
@@ -106,46 +127,84 @@ export class UserRepository extends BaseRepository<IUser> {
     totalPages: number;
   }> {
     try {
-      logger.debug('Finding users with pagination', { filter, page, limit });
-
-      const skip = (page - 1) * limit;
-      const baseFilter = {
-        ...filter,
-        isDeleted: { $ne: true },
-      };
-
-      const [users, total] = await Promise.all([
-        this.find(baseFilter, {
-          limit,
-          skip,
-          sort: { createdAt: -1 },
-        }),
-        this.count(baseFilter),
-      ]);
-
-      const totalPages = Math.ceil(total / limit);
-
-      logger.debug('Users found with pagination', {
-        count: users.length,
-        total,
-        page,
-        totalPages,
-      });
-
-      return {
-        users,
-        total,
-        page,
-        totalPages,
-      };
+      this.logPaginationStart(filter, page, limit);
+      const result = await this.executeUserPaginationQuery(filter, page, limit);
+      this.logPaginationResults(result);
+      return result;
     } catch (error) {
-      logger.error('Failed to find users with pagination:', {
-        error,
-        filter,
-        page,
-        limit,
-      });
+      this.handlePaginationError(error, filter, page, limit);
       throw error;
     }
+  }
+
+  private logPaginationStart(
+    filter: FilterQuery<IUser>,
+    page: number,
+    limit: number,
+  ): void {
+    logger.debug('Finding users with pagination', { filter, page, limit });
+  }
+
+  private async executeUserPaginationQuery(
+    filter: FilterQuery<IUser>,
+    page: number,
+    limit: number,
+  ): Promise<{
+    users: IUser[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
+    const skip = (page - 1) * limit;
+    const baseFilter = {
+      ...filter,
+      isDeleted: { $ne: true },
+    };
+
+    const [users, total] = await Promise.all([
+      this.find(baseFilter, {
+        limit,
+        skip,
+        sort: { createdAt: -1 },
+      }),
+      this.count(baseFilter),
+    ]);
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      users,
+      total,
+      page,
+      totalPages,
+    };
+  }
+
+  private logPaginationResults(result: {
+    users: IUser[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }): void {
+    logger.debug('Users found with pagination', {
+      count: result.users.length,
+      total: result.total,
+      page: result.page,
+      totalPages: result.totalPages,
+    });
+  }
+
+  private handlePaginationError(
+    error: unknown,
+    filter: FilterQuery<IUser>,
+    page: number,
+    limit: number,
+  ): void {
+    logger.error('Failed to find users with pagination:', {
+      error,
+      filter,
+      page,
+      limit,
+    });
   }
 }

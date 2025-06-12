@@ -66,10 +66,17 @@ export abstract class BaseRepository<T extends Document> {
     }
   }
 
-  public async findOne(filter: FilterQuery<T>): Promise<T | null> {
+  public async findOne(
+    filter: FilterQuery<T>,
+    select?: string | null,
+  ): Promise<T | null> {
     try {
-      logger.debug(`Finding ${this.modelName} with filter`, { filter });
-      const result = await this.model.findOne(filter).exec();
+      logger.debug(`Finding ${this.modelName} with filter`, { filter, select });
+      const query = this.model.findOne(filter);
+      if (select) {
+        query.select(select);
+      }
+      const result = await query.exec();
       logger.debug(`${this.modelName} found with filter`, {
         filter,
         found: !!result,

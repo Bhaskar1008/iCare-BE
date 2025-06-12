@@ -1,41 +1,107 @@
 import express from 'express';
 import type { Express, Request, Response, NextFunction } from 'express';
 import type { Server } from 'http';
+import cors from 'cors';
+import passport from 'passport';
+import session from 'express-session';
+import MongoStore from 'connect-mongo';
 import type { IAppConfig } from '@/common/interfaces/app.interface';
 import { DatabaseProvider } from '@/providers/database.provider';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec, swaggerUiOptions } from '@/config/swagger';
+import { configurePassport } from '@/config/passport';
 import logger from '@/common/utils/logger';
 import { requestLogger } from '@/middleware/requestLogger';
 import userRoutes from '@/modules/user/user.routes';
-import leadConfigRoutes from '@/modules/lead-config/lead-config.routes';
-import leadRoutes from '@/modules/lead/lead.routes';
 import channelRoutes from '@/modules/channel/channel.routes';
 import hierarchyRoutes from '@/modules/hierarchy/hierarchy.routes';
+import roleRoutes from '@/modules/role/role.routes';
 import { HTTP_STATUS } from '@/common/constants/http-status.constants';
 import eventRoutes from '@/modules/event/event.routes';
-import taskRoutes from './modules/task/task.routes';
+import taskRoutes from '@/modules/task/task.routes';
+import permissionResourceRoutes from '@/modules/permissionResources/permissionResource.routes';
+import permissionRoutes from '@/modules/permission/permission.routes';
+import designationRoutes from '@/modules/designation/designation.routes';
+import authRoutes from '@/modules/auth/auth.routes';
+import agentRoutes from '@/modules/agent/agent.routes';
+import leadRoutes from '@/modules/lead/lead.routes';
+import provinceRoutes from '@/modules/province/province.routes';
+import businessCommitmentRoutes from '@/modules/business-commitment/business-commitment.routes';
+import productCategoryRoutes from '@/modules/product-category/product-category.routes';
+import productRoutes from '@/modules/product/product.routes';
+import cookieParser from 'cookie-parser';
+
+// Session constants
+const SECONDS_PER_MINUTE = 60;
+const MINUTES_PER_HOUR = 60;
+const HOURS_PER_DAY = 24;
+const MILLISECONDS_PER_SECOND = 1000;
+
+const ONE_DAY_IN_SECONDS =
+  HOURS_PER_DAY * MINUTES_PER_HOUR * SECONDS_PER_MINUTE;
+const ONE_DAY_IN_MS = ONE_DAY_IN_SECONDS * MILLISECONDS_PER_SECOND;
+const TEN_MINUTES = 10;
 
 export class App {
   private app: Express;
   private server: Server | null = null;
   private config: IAppConfig;
   private databaseProvider: DatabaseProvider;
+  private readonly SESSION_SECRET =
+    process.env.SESSION_SECRET ?? 'your-very-secure-session-secret-key-12345';
 
   constructor(config: IAppConfig) {
     this.config = config;
     this.app = express();
     this.databaseProvider = new DatabaseProvider(config.database);
     this.initializeMiddlewares();
+    this.initializePassport();
     this.initializeSwagger();
     this.initializeRoutes();
     this.initializeErrorHandling();
   }
 
   private initializeMiddlewares(): void {
+    this.app.use(
+      cors({
+        origin: this.config.corsOrigin ?? '*',
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+        credentials: true,
+      }),
+    );
     this.app.use(requestLogger);
     this.app.use(express.json());
     this.app.use(express.urlencoded({ extended: true }));
+    this.app.use(cookieParser());
+
+    this.app.use(
+      session({
+        secret: this.SESSION_SECRET,
+        resave: false,
+        saveUninitialized: false,
+        store: MongoStore.create({
+          mongoUrl: this.config.database.uri,
+          dbName: this.config.database.dbName,
+          collectionName: 'sessions',
+          ttl: ONE_DAY_IN_SECONDS,
+          autoRemove: 'interval',
+          autoRemoveInterval: TEN_MINUTES,
+          touchAfter: ONE_DAY_IN_SECONDS,
+        }),
+        cookie: {
+          secure: process.env.NODE_ENV === 'production',
+          httpOnly: true,
+          maxAge: ONE_DAY_IN_MS,
+          sameSite: 'lax',
+        },
+      }),
+    );
+  }
+
+  private initializePassport(): void {
+    configurePassport();
+    this.app.use(passport.initialize());
+    this.app.use(passport.session());
   }
 
   private initializeSwagger(): void {
@@ -69,13 +135,22 @@ export class App {
       });
     });
 
+    this.app.use('/api/auth', authRoutes);
     this.app.use('/api/users', userRoutes);
-    this.app.use('/api/lead-config', leadConfigRoutes);
-    this.app.use('/api/leads', leadRoutes);
     this.app.use('/api/channels', channelRoutes);
     this.app.use('/api/hierarchies', hierarchyRoutes);
+    this.app.use('/api/roles', roleRoutes);
     this.app.use('/api/events', eventRoutes);
     this.app.use('/api/task', taskRoutes);
+    this.app.use('/api/permissions', permissionRoutes);
+    this.app.use('/api/permission-resources', permissionResourceRoutes);
+    this.app.use('/api/designations', designationRoutes);
+    this.app.use('/api/agents', agentRoutes);
+    this.app.use('/api/leads', leadRoutes);
+    this.app.use('/api/provinces', provinceRoutes);
+    this.app.use('/api/business-commitments', businessCommitmentRoutes);
+    this.app.use('/api/product-categories', productCategoryRoutes);
+    this.app.use('/api/products', productRoutes);
 
     this.app.use((req: Request, res: Response) => {
       res.status(HTTP_STATUS.NOT_FOUND).json({
@@ -114,15 +189,6 @@ export class App {
           logger.info(`Server is running on port ${this.config.port}`);
           logger.info(
             `Swagger documentation available at http://localhost:${this.config.port}/docs`,
-          );
-          logger.info(
-            `User API available at http://localhost:${this.config.port}/api/users`,
-          );
-          logger.info(
-            `Channel API available at http://localhost:${this.config.port}/api/channels`,
-          );
-          logger.info(
-            `Hierarchy API available at http://localhost:${this.config.port}/api/hierarchies`,
           );
           resolve();
         });

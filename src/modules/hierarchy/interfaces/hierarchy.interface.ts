@@ -48,6 +48,11 @@ export interface IHierarchyService {
     level?: number,
     status?: 'active' | 'inactive',
   ): Promise<HierarchyListResponseDto>;
+  getHierarchyTeamMemberList(
+    channelId: string,
+    userId: string,
+    isTeamMembers: boolean,
+  ): Promise<unknown[]>;
   updateHierarchy(
     id: string,
     data: UpdateHierarchyDto,
@@ -63,6 +68,7 @@ export interface IHierarchyController {
   getRootHierarchies(req: Request, res: Response): Promise<void>;
   getChildHierarchies(req: Request, res: Response): Promise<void>;
   getAllHierarchies(req: Request, res: Response): Promise<void>;
+  getHierarchyTeamMemberList(req: Request, res: Response): Promise<void>;
   updateHierarchy(req: Request, res: Response): Promise<void>;
   deleteHierarchy(req: Request, res: Response): Promise<void>;
 }

@@ -9,9 +9,14 @@ import type {
 import type { IHierarchy } from '@/models/hierarchy.model';
 import { DatabaseValidationException } from '@/common/exceptions/database.exception';
 import { ChannelModel } from '@/models/channel.model';
-import { Types, type FilterQuery } from 'mongoose';
+import mongoose, {
+  Types,
+  type FilterQuery,
+  type PipelineStage,
+} from 'mongoose';
 import { HIERARCHY } from '@/common/constants/http-status.constants';
 import logger from '@/common/utils/logger';
+import { AgentModel } from '@/models/agent.model';
 
 export class HierarchyService implements IHierarchyService {
   private hierarchyRepository: HierarchyRepository;
@@ -477,6 +482,329 @@ export class HierarchyService implements IHierarchyService {
         error: err.message,
         stack: err.stack,
         id,
+      });
+      throw error;
+    }
+  }
+
+  public async getHierarchyTeamMemberList(
+    channelId: string,
+    userId: string,
+    isTeamMembers: boolean,
+  ): Promise<unknown[]> {
+    try {
+      logger.debug('Getting hierarchy team member list', {
+        channelId,
+        userId,
+        isTeamMembers,
+      });
+
+      if (isTeamMembers) {
+        return this.getTeamMembersForUser(channelId, userId);
+      } else {
+        return this.getHierarchiesForUser(channelId, userId);
+      }
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.error('Failed to get hierarchy team member list:', {
+        error: err.message,
+        stack: err.stack,
+        channelId,
+        userId,
+        isTeamMembers,
+      });
+      throw error;
+    }
+  }
+
+  private async getHierarchiesForUser(
+    channelId: string,
+    userId: string,
+  ): Promise<HierarchyResponseDto[]> {
+    try {
+      logger.debug('Getting hierarchies for user based on hierarchyOrder', {
+        userId,
+      });
+
+      // Get user's hierarchy order through agent -> designation -> hierarchy relationship
+      const agent = await AgentModel.findOne({
+        userId,
+        isDeleted: false,
+      }).populate({
+        path: 'designationId',
+        populate: {
+          path: 'hierarchyId',
+        },
+      });
+
+      logger.debug('Agent lookup result', {
+        userId,
+        agentFound: !!agent,
+        agentId: agent?._id,
+        designationId: agent?.designationId,
+      });
+
+      if (!agent) {
+        logger.debug('No agent found for user, returning all hierarchies', {
+          userId,
+        });
+        // Fallback: return all hierarchies
+        const allHierarchies = await this.hierarchyRepository.find({
+          isDeleted: false,
+        });
+        return allHierarchies.map(hierarchy =>
+          this.mapToResponseDto(hierarchy),
+        );
+      }
+
+      const designation = agent.designationId as {
+        hierarchyId?: { hierarchyOrder: number };
+      };
+      const userHierarchyOrder = designation?.hierarchyId?.hierarchyOrder;
+
+      logger.debug('Hierarchy order extraction', {
+        userId,
+        designation,
+        userHierarchyOrder,
+        hasHierarchyId: !!designation?.hierarchyId,
+      });
+
+      if (userHierarchyOrder === undefined) {
+        logger.debug(
+          'No hierarchy order found for user, returning all hierarchies',
+          { userId },
+        );
+        // Fallback: return all hierarchies
+        const allHierarchies = await this.hierarchyRepository.find({
+          isDeleted: false,
+        });
+        return allHierarchies.map(hierarchy =>
+          this.mapToResponseDto(hierarchy),
+        );
+      }
+
+      // Get ALL hierarchies (not filtered by channel)
+      const allHierarchies = await this.hierarchyRepository.find({
+        isDeleted: false,
+      });
+
+      logger.debug('All hierarchies in system', {
+        totalHierarchies: allHierarchies.length,
+        hierarchyOrders: allHierarchies.map(h => ({
+          id: h._id,
+          order: h.hierarchyOrder,
+          name: h.hierarchyName,
+        })),
+      });
+
+      // Filter hierarchies with hierarchyOrder <= user's hierarchyOrder
+      const filteredHierarchies = allHierarchies.filter(
+        hierarchy => hierarchy.hierarchyOrder <= userHierarchyOrder,
+      );
+
+      logger.debug('Hierarchies filtered by hierarchyOrder', {
+        userId,
+        userHierarchyOrder,
+        totalHierarchies: allHierarchies.length,
+        filteredCount: filteredHierarchies.length,
+        filteredHierarchies: filteredHierarchies.map(h => ({
+          id: h._id,
+          order: h.hierarchyOrder,
+          name: h.hierarchyName,
+        })),
+      });
+
+      return filteredHierarchies.map(hierarchy =>
+        this.mapToResponseDto(hierarchy),
+      );
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.error('Failed to get hierarchies for user:', {
+        error: err.message,
+        stack: err.stack,
+        userId,
+      });
+      throw error;
+    }
+  }
+
+  private buildTeamMemberHierarchyLookupStage(): PipelineStage {
+    return {
+      $lookup: {
+        from: 'hierarchies',
+        localField: 'channelId',
+        foreignField: 'channelId',
+        as: 'hierarchy',
+      },
+    };
+  }
+
+  private buildTeamMemberChannelMatchStage(channelId: string): PipelineStage {
+    return {
+      $match: {
+        channelId: new mongoose.Types.ObjectId(channelId),
+        isDeleted: false,
+      },
+    };
+  }
+
+  private buildTeamMemberFacetStage(): PipelineStage {
+    return {
+      $facet: {
+        matchedAgentHierarchyOrder: [
+          {
+            $project: {
+              currentHierarchyOrder: 1,
+            },
+          },
+        ],
+        allAgents: [
+          {
+            $lookup: {
+              from: 'hierarchies',
+              localField: 'channelId',
+              foreignField: 'channelId',
+              as: 'hierarchy',
+            },
+          },
+          { $unwind: '$hierarchy' },
+          {
+            $match: {
+              isDeleted: false,
+            },
+          },
+        ],
+      },
+    };
+  }
+
+  private buildTeamMemberFilterStages(): PipelineStage[] {
+    return [
+      {
+        $project: {
+          currentHierarchyOrder: {
+            $arrayElemAt: [
+              '$matchedAgentHierarchyOrder.currentHierarchyOrder',
+              0,
+            ],
+          },
+          allAgents: 1,
+        },
+      },
+      {
+        $project: {
+          agents: {
+            $filter: {
+              input: '$allAgents',
+              as: 'agent',
+              cond: {
+                $lte: [
+                  '$$agent.hierarchy.hierarchyOrder',
+                  '$currentHierarchyOrder',
+                ],
+              },
+            },
+          },
+        },
+      },
+      { $unwind: '$agents' },
+      { $replaceRoot: { newRoot: '$agents' } },
+    ];
+  }
+
+  private buildTeamMemberPopulationStages(): PipelineStage[] {
+    return [
+      {
+        $lookup: {
+          from: 'channels',
+          localField: 'channelId',
+          foreignField: '_id',
+          as: 'channelId',
+        },
+      },
+      {
+        $lookup: {
+          from: 'designations',
+          localField: 'designationId',
+          foreignField: '_id',
+          as: 'designationId',
+        },
+      },
+      {
+        $lookup: {
+          from: 'agents',
+          localField: 'teamLeadId',
+          foreignField: '_id',
+          as: 'teamLeadId',
+        },
+      },
+      {
+        $lookup: {
+          from: 'agents',
+          localField: 'reportingManagerId',
+          foreignField: '_id',
+          as: 'reportingManagerId',
+        },
+      },
+      {
+        $unwind: { path: '$channelId', preserveNullAndEmptyArrays: true },
+      },
+      {
+        $unwind: { path: '$designationId', preserveNullAndEmptyArrays: true },
+      },
+      {
+        $unwind: { path: '$teamLeadId', preserveNullAndEmptyArrays: true },
+      },
+      {
+        $unwind: {
+          path: '$reportingManagerId',
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+    ];
+  }
+
+  private async getTeamMembersForUser(
+    channelId: string,
+    userId: string,
+  ): Promise<unknown[]> {
+    try {
+      logger.debug('Getting team members with hierarchy filtering for user', {
+        channelId,
+        userId,
+      });
+
+      // Build the aggregation pipeline using helper methods
+      const pipeline: PipelineStage[] = [
+        this.buildTeamMemberHierarchyLookupStage(),
+        { $unwind: '$hierarchy' },
+        this.buildTeamMemberChannelMatchStage(channelId),
+        {
+          $set: {
+            currentHierarchyOrder: '$hierarchy.hierarchyOrder',
+          },
+        },
+        this.buildTeamMemberFacetStage(),
+        ...this.buildTeamMemberFilterStages(),
+        ...this.buildTeamMemberPopulationStages(),
+      ];
+
+      const agents = await AgentModel.aggregate(pipeline);
+
+      logger.debug('Team members retrieved with hierarchy filtering', {
+        channelId,
+        userId,
+        count: agents.length,
+      });
+
+      return agents as unknown[];
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.error('Failed to get team members for user:', {
+        error: err.message,
+        stack: err.stack,
+        channelId,
+        userId,
       });
       throw error;
     }

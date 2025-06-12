@@ -1,5 +1,9 @@
 import { Router } from 'express';
 import { UserController } from './user.controller';
+import { ValidationPipe } from '@/common/pipes/validation.pipe';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { UserQueryDto } from './dto/user-query.dto';
 
 const router = Router();
 const userController = new UserController();
@@ -110,22 +114,25 @@ const userController = new UserController();
  *           type: array
  *           items:
  *             $ref: '#/components/schemas/UserResponse'
- *         total:
- *           type: integer
- *           description: Total number of users
- *           example: 100
- *         page:
- *           type: integer
- *           description: Current page number
- *           example: 1
- *         totalPages:
- *           type: integer
- *           description: Total number of pages
- *           example: 10
- *         limit:
- *           type: integer
- *           description: Number of items per page
- *           example: 10
+ *         pagination:
+ *           type: object
+ *           properties:
+ *             total:
+ *               type: integer
+ *               description: Total number of users
+ *               example: 100
+ *             page:
+ *               type: integer
+ *               description: Current page number
+ *               example: 1
+ *             totalPages:
+ *               type: integer
+ *               description: Total number of pages
+ *               example: 10
+ *             limit:
+ *               type: integer
+ *               description: Number of items per page
+ *               example: 10
  *
  *     ApiResponse:
  *       type: object
@@ -228,16 +235,18 @@ const userController = new UserController();
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/', async (req, res) => {
-  await userController.createUser(req, res);
-});
+router.post(
+  '/',
+  ValidationPipe.validateBody(CreateUserDto),
+  userController.createUser,
+);
 
 /**
  * @swagger
  * /api/users:
  *   get:
  *     tags: [Users]
- *     summary: Get all users with pagination
+ *     summary: Get all users with pagination and filtering
  *     description: Retrieves a paginated list of users with optional filtering
  *     parameters:
  *       - in: query
@@ -247,7 +256,6 @@ router.post('/', async (req, res) => {
  *           minimum: 1
  *           default: 1
  *         description: Page number for pagination
- *         example: 1
  *       - in: query
  *         name: limit
  *         schema:
@@ -256,19 +264,16 @@ router.post('/', async (req, res) => {
  *           maximum: 100
  *           default: 10
  *         description: Number of items per page
- *         example: 10
  *       - in: query
  *         name: search
  *         schema:
  *           type: string
- *         description: Search term for firstName, lastName, or email
- *         example: "john"
+ *         description: Search in user's name and email
  *       - in: query
  *         name: isActive
  *         schema:
  *           type: boolean
- *         description: Filter by active status
- *         example: true
+ *         description: Filter by active users
  *     responses:
  *       200:
  *         description: Users retrieved successfully
@@ -307,9 +312,11 @@ router.post('/', async (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/', async (req, res) => {
-  await userController.getAllUsers(req, res);
-});
+router.get(
+  '/',
+  ValidationPipe.validateQuery(UserQueryDto),
+  userController.getAllUsers,
+);
 
 /**
  * @swagger
@@ -324,8 +331,7 @@ router.get('/', async (req, res) => {
  *         required: true
  *         schema:
  *           type: string
- *         description: User's unique identifier
- *         example: "507f1f77bcf86cd799439011"
+ *         description: User ID
  *     responses:
  *       200:
  *         description: User retrieved successfully
@@ -375,9 +381,7 @@ router.get('/', async (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:id', async (req, res) => {
-  await userController.getUserById(req, res);
-});
+router.get('/:id', userController.getUserById);
 
 /**
  * @swagger
@@ -385,16 +389,14 @@ router.get('/:id', async (req, res) => {
  *   get:
  *     tags: [Users]
  *     summary: Get user by email
- *     description: Retrieves a specific user by their email address
+ *     description: Retrieves a specific user by their email
  *     parameters:
  *       - in: path
  *         name: email
  *         required: true
  *         schema:
  *           type: string
- *           format: email
- *         description: User's email address
- *         example: "john.doe@example.com"
+ *         description: User email
  *     responses:
  *       200:
  *         description: User retrieved successfully
@@ -426,9 +428,7 @@ router.get('/:id', async (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/email/:email', async (req, res) => {
-  await userController.getUserByEmail(req, res);
-});
+router.get('/email/:email', userController.getUserByEmail);
 
 /**
  * @swagger
@@ -443,8 +443,7 @@ router.get('/email/:email', async (req, res) => {
  *         required: true
  *         schema:
  *           type: string
- *         description: User's unique identifier
- *         example: "507f1f77bcf86cd799439011"
+ *         description: User ID
  *     requestBody:
  *       required: true
  *       content:
@@ -502,25 +501,26 @@ router.get('/email/:email', async (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.put('/:id', async (req, res) => {
-  await userController.updateUser(req, res);
-});
+router.put(
+  '/:id',
+  ValidationPipe.validateBody(UpdateUserDto),
+  userController.updateUser,
+);
 
 /**
  * @swagger
  * /api/users/{id}:
  *   delete:
  *     tags: [Users]
- *     summary: Delete user (soft delete)
- *     description: Soft deletes a user by setting isDeleted flag to true
+ *     summary: Delete user
+ *     description: Soft deletes a user (marks as deleted)
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
  *           type: string
- *         description: User's unique identifier
- *         example: "507f1f77bcf86cd799439011"
+ *         description: User ID
  *     responses:
  *       200:
  *         description: User deleted successfully
@@ -534,53 +534,26 @@ router.put('/:id', async (req, res) => {
  *                     data:
  *                       type: object
  *                       properties:
- *                         deleted:
- *                           type: boolean
- *                           example: true
- *             example:
- *               success: true
- *               message: "User deleted successfully"
- *               data:
- *                 deleted: true
- *               timestamp: "2024-01-15T10:30:00.000Z"
- *       400:
- *         description: Bad request - invalid user ID
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       404:
- *         description: User not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
+ *                         id:
+ *                           type: string
+ *                           description: Deleted user ID
  */
-router.delete('/:id', async (req, res) => {
-  await userController.deleteUser(req, res);
-});
+router.delete('/:id', userController.deleteUser);
 
 /**
  * @swagger
  * /api/users/{id}/restore:
- *   post:
+ *   patch:
  *     tags: [Users]
  *     summary: Restore deleted user
- *     description: Restores a previously soft-deleted user
+ *     description: Restores a previously deleted user
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
  *           type: string
- *         description: User's unique identifier
- *         example: "507f1f77bcf86cd799439011"
+ *         description: User ID
  *     responses:
  *       200:
  *         description: User restored successfully
@@ -593,58 +566,23 @@ router.delete('/:id', async (req, res) => {
  *                   properties:
  *                     data:
  *                       $ref: '#/components/schemas/UserResponse'
- *             example:
- *               success: true
- *               message: "User restored successfully"
- *               data:
- *                 id: "507f1f77bcf86cd799439011"
- *                 email: "john.doe@example.com"
- *                 firstName: "John"
- *                 lastName: "Doe"
- *                 fullName: "John Doe"
- *                 isActive: true
- *                 lastLoginAt: "2024-01-15T10:30:00.000Z"
- *                 createdAt: "2024-01-15T10:30:00.000Z"
- *                 updatedAt: "2024-01-15T10:30:00.000Z"
- *               timestamp: "2024-01-15T10:30:00.000Z"
- *       400:
- *         description: Bad request - invalid user ID
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       404:
- *         description: User not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/:id/restore', async (req, res) => {
-  await userController.restoreUser(req, res);
-});
+router.patch('/:id/restore', userController.restoreUser);
 
 /**
  * @swagger
  * /api/users/{id}/last-login:
  *   patch:
  *     tags: [Users]
- *     summary: Update user's last login timestamp
- *     description: Updates the last login timestamp for a user to the current time
+ *     summary: Update user's last login time
+ *     description: Updates the last login timestamp for a user
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
  *           type: string
- *         description: User's unique identifier
- *         example: "507f1f77bcf86cd799439011"
+ *         description: User ID
  *     responses:
  *       200:
  *         description: Last login updated successfully
@@ -657,41 +595,7 @@ router.post('/:id/restore', async (req, res) => {
  *                   properties:
  *                     data:
  *                       $ref: '#/components/schemas/UserResponse'
- *             example:
- *               success: true
- *               message: "Last login updated successfully"
- *               data:
- *                 id: "507f1f77bcf86cd799439011"
- *                 email: "john.doe@example.com"
- *                 firstName: "John"
- *                 lastName: "Doe"
- *                 fullName: "John Doe"
- *                 isActive: true
- *                 lastLoginAt: "2024-01-15T10:30:00.000Z"
- *                 createdAt: "2024-01-15T10:30:00.000Z"
- *                 updatedAt: "2024-01-15T10:30:00.000Z"
- *               timestamp: "2024-01-15T10:30:00.000Z"
- *       400:
- *         description: Bad request - invalid user ID
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       404:
- *         description: User not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.patch('/:id/last-login', async (req, res) => {
-  await userController.updateLastLogin(req, res);
-});
+router.patch('/:id/last-login', userController.updateLastLogin);
 
 export default router;

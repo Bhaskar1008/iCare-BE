@@ -1,22 +1,53 @@
 import type { Request, Response } from 'express';
-import { Types } from 'mongoose';
 import { BaseController } from '@/controllers/base.controller';
 import { leadService } from './lead.service';
-import { BadRequestException } from '../../common/exceptions/bad-request.exception';
-import { MESSAGES } from '@/common/constants/messages.constants';
+import type { ILead } from '@/models/lead.model';
+import { HTTP_STATUS } from '@/common/constants/http-status.constants';
+import { BadRequestException } from '@/common/exceptions/bad-request.exception';
+import { Types } from 'mongoose';
+
+type LeadFilter =
+  | 'today'
+  | 'all'
+  | 'Open'
+  | 'Converted'
+  | 'Discarded'
+  | 'Failed';
+
+interface AdvancedFilterCriteria {
+  sortBy?:
+    | 'Lead Created date - Newest to oldest'
+    | 'Lead Created date - oldest to Newest';
+  searchType?: 'Name' | 'Mobile' | 'Lead ID';
+  name?: string;
+  leadStatus?: string;
+  leadType?: string;
+  leadProgress?: string;
+  leadDisposition?: string;
+  leadSubDisposition?: string;
+  createdBy: string;
+}
+
+interface CreateLeadRequest {
+  firstName: string;
+  lastName: string;
+  emailAddress: string;
+  primaryNumber: string;
+  leadType: string;
+  stage: string;
+  leadProgress: string;
+  allocatedTo: string;
+  allocatedBy: string;
+  createdBy: string;
+  [key: string]: unknown;
+}
 
 class LeadController extends BaseController {
-  /**
-   * Create a new lead
-   */
-  public createLead = async (req: Request, res: Response) => {
+  public createLead = async (
+    req: Request<unknown, unknown, CreateLeadRequest>,
+    res: Response,
+  ): Promise<void> => {
     try {
-      const { productId } = req.body;
-
-      if (!Types.ObjectId.isValid(productId)) {
-        return this.sendBadRequest(res, MESSAGES.LEAD.CREATE.VALIDATION.INVALID_PRODUCT);
-      }
-
       // Validate required fields for initial creation
       const requiredFields = [
         'firstName',
@@ -27,198 +58,319 @@ class LeadController extends BaseController {
         'stage',
         'leadProgress',
         'allocatedTo',
-        'allocatedBy'
+        'allocatedBy',
+        'createdBy',
       ];
 
-      const missingFields = this.validateRequiredFields(req.body, requiredFields);
+      const missingFields = requiredFields.filter(field => !req.body[field]);
       if (missingFields.length > 0) {
-        return this.sendBadRequest(res, MESSAGES.LEAD.CREATE.VALIDATION.MISSING_FIELDS(missingFields));
+        throw new BadRequestException(
+          `Missing required fields: ${missingFields.join(', ')}`,
+        );
       }
 
-      // Validate email format
-      if (!this.validateEmail(req.body.emailAddress)) {
-        return this.sendBadRequest(res, 'Invalid email address format');
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(req.body.emailAddress)) {
+        throw new BadRequestException('Invalid email address format');
       }
-      console.log("req.body", req.body);
-      const lead = await leadService.createLead(req.body);
-      return this.sendCreated(res, lead, MESSAGES.LEAD.CREATE.SUCCESS);
+
+      const existingLead = await leadService.verifyLead(
+        req.body.emailAddress,
+        req.body.primaryNumber,
+      );
+      if (existingLead) {
+        throw new BadRequestException('Lead already exists');
+      }
+
+      // Convert string IDs to ObjectIds
+      const leadData: Partial<ILead> = {
+        ...req.body,
+        allocatedTo: new Types.ObjectId(req.body.allocatedTo),
+        allocatedBy: new Types.ObjectId(req.body.allocatedBy),
+        createdBy: new Types.ObjectId(req.body.createdBy),
+      };
+
+      // Create lead
+      const lead = await leadService.createLead(leadData);
+
+      this.sendCreated(res, {
+        message: 'Lead created successfully. Please update additional details.',
+        data: lead,
+      });
     } catch (error) {
-      return this.sendError(res, (error as Error).message || MESSAGES.LEAD.CREATE.FAILURE);
+      if (error instanceof BadRequestException) {
+        this.sendBadRequest(res, error.message);
+        return;
+      }
+      this.handleError(error as Error, res);
     }
   };
 
-  /**
-   * Update an existing lead
-   */
-  public updateLead = async (req: Request<{ id: string }>, res: Response) => {
+  public getLead = async (
+    req: Request<{ id: string }>,
+    res: Response,
+  ): Promise<void> => {
     try {
-      const { id } = req.params;
-
+      const id = String(req.params.id);
       if (!Types.ObjectId.isValid(id)) {
-        return this.sendBadRequest(res, MESSAGES.COMMON.INVALID_ID);
-      }
-
-      const lead = await leadService.updateLead(id, req.body);
-      if (!lead) {
-        return this.sendNotFound(res, MESSAGES.LEAD.UPDATE.NOT_FOUND);
-      }
-
-      return this.sendSuccess(res, lead, MESSAGES.LEAD.UPDATE.SUCCESS);
-    } catch (error) {
-      return this.sendError(res, (error as Error).message || MESSAGES.LEAD.UPDATE.FAILURE);
-    }
-  };
-
-  /**
-   * Get a lead by ID
-   */
-  public getLead = async (req: Request<{ id: string }>, res: Response) => {
-    try {
-      const { id } = req.params;
-
-      if (!Types.ObjectId.isValid(id)) {
-        return this.sendBadRequest(res, MESSAGES.COMMON.INVALID_ID);
+        throw new BadRequestException('Invalid lead ID format');
       }
 
       const lead = await leadService.getLead(id);
-      if (!lead) {
-        return this.sendNotFound(res, MESSAGES.LEAD.GET.NOT_FOUND);
-      }
-
-      return this.sendSuccess(res, lead, MESSAGES.LEAD.GET.SUCCESS);
+      this.sendSuccess(res, lead);
     } catch (error) {
-      return this.sendError(res, (error as Error).message || MESSAGES.LEAD.GET.FAILURE);
+      this.handleError(error as Error, res);
     }
   };
 
-  /**
-   * Get leads with pagination
-   */
-  public getLeads = async (req: Request, res: Response) => {
+  public updateLead = async (
+    req: Request<{ id: string }, unknown, Partial<ILead>>,
+    res: Response,
+  ): Promise<void> => {
     try {
-      const { allocatedTo } = req.params;
-      const { page = 1, limit = 10, ...filters } = req.query;
-
-      if (!allocatedTo) {
-        return this.sendBadRequest(res, MESSAGES.LEAD.GET.INVALID_QUERY);
-      }
-
-      const result = await leadService.getLeads({
-        allocatedTo,
-        page: Number(page),
-        limit: Number(limit),
-        ...filters
-      });
-
-      return this.sendSuccess(res, result, MESSAGES.LEAD.GET.SUCCESS);
-    } catch (error) {
-      return this.sendError(res, (error as Error).message || MESSAGES.LEAD.GET.FAILURE);
-    }
-  };
-
-  /**
-   * Delete a lead
-   */
-  public deleteLead = async (req: Request<{ id: string }>, res: Response) => {
-    try {
-      const { id } = req.params;
-
+      const id = String(req.params.id);
       if (!Types.ObjectId.isValid(id)) {
-        return this.sendBadRequest(res, 'Invalid lead ID');
+        throw new BadRequestException('Invalid lead ID format');
       }
 
-      const lead = await leadService.deleteLead(id);
-      if (!lead) {
-        return this.sendNotFound(res, 'Lead not found');
-      }
+      const updateData: Partial<ILead> = { ...req.body };
 
-      return this.sendSuccess(res, lead, 'Lead deleted successfully');
-    } catch (error) {
-      return this.sendError(res, (error as Error).message);
-    }
-  };
+      const objectIdFields = [
+        'allocatedTo',
+        'allocatedBy',
+        'createdBy',
+      ] as const;
+      type ObjectIdField = (typeof objectIdFields)[number];
 
-  /**
-   * Change ownership of leads
-   */
-  public changeOwnership = async (req: Request, res: Response) => {
-    try {
-      const { leadIds, newOwnerId, changedBy } = req.body;
-      // const changedBy = req.user?.id; // Assuming you have user info in request
-
-      if (!Array.isArray(leadIds) || leadIds.length === 0) {
-        return this.sendBadRequest(res, MESSAGES.LEAD.OWNERSHIP.VALIDATION.INVALID_LEADS);
-      }
-
-      if (!newOwnerId) {
-        return this.sendBadRequest(res, MESSAGES.LEAD.OWNERSHIP.VALIDATION.INVALID_OWNER);
-      }
-
-      if (!changedBy) {
-        return this.sendBadRequest(res, 'User information is missing');
-      }
-
-      const result = await leadService.changeOwnership({
-        leadIds,
-        newOwnerId,
-        changedBy,
-        remarks: req.body.remarks
+      objectIdFields.forEach((field: ObjectIdField) => {
+        const value = req.body[field];
+        if (value && typeof value === 'string') {
+          if (!Types.ObjectId.isValid(value)) {
+            throw new BadRequestException(`Invalid ${field} ID format`);
+          }
+          updateData[field] = new Types.ObjectId(value);
+        }
       });
 
-      return this.sendSuccess(res, result, MESSAGES.LEAD.OWNERSHIP.SUCCESS);
+      const lead = await leadService.updateLead(id, updateData);
+      this.sendSuccess(res, lead);
     } catch (error) {
-      return this.sendError(res, (error as Error).message || MESSAGES.LEAD.OWNERSHIP.FAILURE);
+      this.handleError(error as Error, res);
     }
   };
 
-  /**
-   * Get lead counts by status
-   */
-  public getLeadStatusCounts = async (req: Request, res: Response) => {
+  public getStatusCount = async (
+    req: Request<{ id: string }>,
+    res: Response,
+  ): Promise<void> => {
     try {
-      const { userId } = req.params;
+      const id = String(req.params.id);
+      const statusCount = await leadService.getStatusCount(id);
+      this.sendSuccess(res, statusCount);
+    } catch (error) {
+      this.handleError(error as Error, res);
+    }
+  };
 
-      if (!userId) {
-        return this.sendBadRequest(res, MESSAGES.COMMON.INVALID_ID);
-      }
-
+  public getLeadStatusCounts = async (
+    req: Request<{ userId: string }>,
+    res: Response,
+  ): Promise<void> => {
+    try {
+      const userId = String(req.params.userId);
       const counts = await leadService.getLeadStatusCounts(userId);
-      return this.sendSuccess(res, counts, MESSAGES.LEAD.STATUS.SUCCESS);
+      this.sendSuccess(res, counts);
     } catch (error) {
-      return this.sendError(res, (error as Error).message || MESSAGES.LEAD.STATUS.FAILURE);
+      this.handleError(error as Error, res);
     }
   };
 
-  /**
-   * Get leads by status
-   */
-  public getLeadsByStatus = async (req: Request, res: Response) => {
+  public getFilteredLeads = async (
+    req: Request<
+      unknown,
+      unknown,
+      unknown,
+      {
+        filter: LeadFilter;
+        page?: string;
+        limit?: string;
+        createdBy: string;
+      }
+    >,
+    res: Response,
+  ): Promise<void> => {
     try {
-      const { status, userId } = req.params;
-      const { page = 1, limit = 10, sortBy, sortOrder } = req.query;
+      const { filter, page = '1', limit = '10', createdBy } = req.query;
 
-      if (!userId) {
-        return this.sendBadRequest(res, MESSAGES.COMMON.INVALID_ID);
+      // Validate filter
+      const validFilters: LeadFilter[] = [
+        'today',
+        'all',
+        'Open',
+        'Converted',
+        'Discarded',
+        'Failed',
+      ];
+      if (!validFilters.includes(filter)) {
+        throw new BadRequestException(
+          'Invalid filter. Must be one of: today, all, Open, Converted, Discarded, Failed',
+        );
       }
 
-      if (!status) {
-        return this.sendBadRequest(res, 'Status parameter is required');
-      }
+      const leads = await leadService.getFilteredLeads(
+        filter,
+        parseInt(page, 10),
+        parseInt(limit, 10),
+        createdBy,
+      );
 
-      const result = await leadService.getLeadsByStatus({
-        status,
-        userId,
-        page: Number(page),
-        limit: Number(limit),
-        sortBy: sortBy as string,
-        sortOrder: (sortOrder as 'asc' | 'desc') || 'desc'
-      });
-
-      return this.sendSuccess(res, result, MESSAGES.LEAD.GET.SUCCESS);
+      this.sendSuccess(res, leads);
     } catch (error) {
-      return this.sendError(res, (error as Error).message || MESSAGES.LEAD.GET.FAILURE);
+      this.handleError(error as Error, res);
     }
   };
+
+  public changeLeadOwnership = async (
+    req: Request<
+      { id: string },
+      unknown,
+      { allocatedTo: string; allocatedBy: string }
+    >,
+    res: Response,
+  ): Promise<void> => {
+    try {
+      const id = String(req.params.id);
+      const { allocatedTo, allocatedBy } = req.body;
+
+      if (!allocatedTo || !allocatedBy) {
+        throw new BadRequestException(
+          'Both allocatedTo and allocatedBy are required',
+        );
+      }
+
+      const lead = await leadService.changeLeadOwnership(
+        id,
+        new Types.ObjectId(allocatedTo),
+        new Types.ObjectId(allocatedBy),
+      );
+
+      this.sendSuccess(res, lead);
+    } catch (error) {
+      this.handleError(error as Error, res);
+    }
+  };
+
+  public getLeadHistory = async (
+    req: Request<
+      { id: string },
+      unknown,
+      unknown,
+      { page?: string; limit?: string }
+    >,
+    res: Response,
+  ): Promise<void> => {
+    try {
+      const id = String(req.params.id);
+      const { page = '1', limit = '10' } = req.query;
+
+      const history = await leadService.getLeadHistory(
+        id,
+        parseInt(page, 10),
+        parseInt(limit, 10),
+      );
+
+      this.sendSuccess(res, history);
+    } catch (error) {
+      this.handleError(error as Error, res);
+    }
+  };
+
+  public advancedFilter = async (
+    req: Request<
+      unknown,
+      unknown,
+      AdvancedFilterCriteria,
+      { page?: string; limit?: string }
+    >,
+    res: Response,
+  ): Promise<void> => {
+    try {
+      const {
+        page = '1',
+        limit = '10',
+        sortBy,
+        createdBy,
+        searchType,
+        name,
+        leadStatus,
+        leadType,
+        leadProgress,
+        leadDisposition,
+        leadSubDisposition,
+      } = req.query as Partial<{
+        page: string;
+        limit: string;
+        sortBy: string;
+        createdBy: string;
+        searchType: string;
+        name: string;
+        leadStatus: string;
+        leadType: string;
+        leadProgress: string;
+        leadDisposition: string;
+        leadSubDisposition: string;
+      }>;
+
+      const filterCriteria: AdvancedFilterCriteria = {
+        createdBy: createdBy ?? '',
+      };
+      if (sortBy)
+        filterCriteria.sortBy =
+          (sortBy as
+            | 'Lead Created date - Newest to oldest'
+            | 'Lead Created date - oldest to Newest') ||
+          'Lead Created date - Newest to oldest';
+      if (createdBy) filterCriteria.createdBy = createdBy;
+      if (searchType)
+        filterCriteria.searchType =
+          (searchType as 'Name' | 'Mobile' | 'Lead ID') || 'Name';
+      if (name) filterCriteria.name = name;
+      if (leadStatus) filterCriteria.leadStatus = leadStatus;
+      if (leadType) filterCriteria.leadType = leadType;
+      if (leadProgress) filterCriteria.leadProgress = leadProgress;
+      if (leadDisposition) filterCriteria.leadDisposition = leadDisposition;
+      if (leadSubDisposition)
+        filterCriteria.leadSubDisposition = leadSubDisposition;
+
+      // Validate createdBy (mandatory field)
+      if (
+        !filterCriteria.createdBy ||
+        !Types.ObjectId.isValid(filterCriteria.createdBy)
+      ) {
+        throw new BadRequestException('Invalid or missing createdBy field');
+      }
+
+      // Validate name field if searchType is Name
+      if (filterCriteria.searchType === 'Name' && !filterCriteria.name) {
+        throw new BadRequestException(
+          'Name is required when searchType is Name',
+        );
+      }
+      const leads = await leadService.getAdvancedFilteredLeads(
+        filterCriteria,
+        parseInt(page, 10),
+        parseInt(limit, 10),
+      );
+
+      this.sendSuccess(res, leads);
+    } catch (error) {
+      this.handleError(error as Error, res);
+    }
+  };
+
+  private handleError(error: Error, res: Response): void {
+    this.sendError(res, error.message, HTTP_STATUS.INTERNAL_SERVER_ERROR);
+  }
 }
 
 export const leadController = new LeadController();

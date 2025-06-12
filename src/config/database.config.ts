@@ -4,8 +4,8 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const DEFAULT_DB_NAME = 'salesverse';
-const DEFAULT_MONGO_URI = 'mongodb+srv://ak:wV6902IKoKDFRCBT@cluster0.fc4ta.mongodb.net/salesverse';
+const DEFAULT_DB_NAME = 'salesverse-dev';
+const DEFAULT_MONGO_URI = 'mongodb://localhost:27017';
 
 export const getDatabaseConfig = (): IDatabaseConfig => {
   const mongoUri = process.env.MONGODB_URI ?? DEFAULT_MONGO_URI;

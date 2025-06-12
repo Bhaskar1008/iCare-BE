@@ -33,6 +33,50 @@ export class EventService {
         throw new BadRequestException('Start date must be before end date');
       }
 
+      // Check for overlapping event
+      const overlappingEvent = await this.eventRepository.findOne({
+        $and: [
+          { status: { $ne: EventStatus.CANCELLED } },
+          {
+            $or: [
+              {
+                // New event starts during an existing event
+                startDateTime: {
+                  $lte: new Date(eventData.startDateTime),
+                },
+                endDateTime: {
+                  $gt: new Date(eventData.startDateTime),
+                },
+              },
+              {
+                // New event ends during an existing event
+                startDateTime: {
+                  $lt: new Date(eventData.endDateTime),
+                },
+                endDateTime: {
+                  $gte: new Date(eventData.endDateTime),
+                },
+              },
+              {
+                // New event completely contains an existing event
+                startDateTime: {
+                  $gte: new Date(eventData.startDateTime),
+                },
+                endDateTime: {
+                  $lte: new Date(eventData.endDateTime),
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+      if (overlappingEvent) {
+        throw new BadRequestException(
+          'An event already exists during this time period',
+        );
+      }
+
       // Create the event
       const event = new Event({
         ...eventData,
@@ -57,44 +101,8 @@ export class EventService {
     filter: IEventFilter,
   ): Promise<EventPaginationResult> {
     try {
-      const {
-        page = 1,
-        limit = 10,
-        status,
-        startDateTime,
-        endDateTime,
-        createdBy,
-      } = filter;
-
-      const query: IEventFilter = {};
-
-      if (status) {
-        query.status = status;
-      }
-
-      if (startDateTime) {
-        const startDate =
-          typeof startDateTime === 'string'
-            ? new Date(startDateTime)
-            : startDateTime;
-        if (isNaN(startDate.getTime())) {
-          throw new BadRequestException('Invalid start date format');
-        }
-        query.startDateTime = { $gte: startDate };
-      }
-
-      if (endDateTime) {
-        const endDate =
-          typeof endDateTime === 'string' ? new Date(endDateTime) : endDateTime;
-        if (isNaN(endDate.getTime())) {
-          throw new BadRequestException('Invalid end date format');
-        }
-        query.endDateTime = { $lte: endDate };
-      }
-
-      if (createdBy && Types.ObjectId.isValid(createdBy)) {
-        query.createdBy = createdBy;
-      }
+      const { page = 1, limit = 10 } = filter;
+      const query = this.buildEventQuery(filter);
 
       const total = await this.eventRepository.countDocuments(query);
       const events = await this.eventRepository.findAllEvents(
@@ -103,16 +111,73 @@ export class EventService {
         limit,
       );
 
-      return {
-        events,
-        totalCount: total,
-        currentPage: page,
-        totalPages: Math.ceil(total / limit),
-      };
+      return this.buildPaginationResult(events, total, page, limit);
     } catch (error) {
       logger.error('Error fetching all events', { error });
       throw error;
     }
+  }
+
+  private buildEventQuery(filter: IEventFilter): Record<string, unknown> {
+    const { status, startDateTime, endDateTime, createdBy } = filter;
+    const query: Record<string, unknown> = {};
+
+    if (status) {
+      query.status = status;
+    }
+
+    this.addDateRangeToQuery(query, startDateTime, endDateTime);
+    this.addCreatedByToQuery(query, createdBy);
+
+    return query;
+  }
+
+  private addDateRangeToQuery(
+    query: Record<string, unknown>,
+    startDateTime?: string | Date,
+    endDateTime?: string | Date,
+  ): void {
+    if (startDateTime) {
+      const startDate = this.parseDate(startDateTime, 'start');
+      query.startDateTime = { $gte: startDate };
+    }
+
+    if (endDateTime) {
+      const endDate = this.parseDate(endDateTime, 'end');
+      query.endDateTime = { $lte: endDate };
+    }
+  }
+
+  private addCreatedByToQuery(
+    query: Record<string, unknown>,
+    createdBy?: string,
+  ): void {
+    if (createdBy && Types.ObjectId.isValid(createdBy)) {
+      query.createdBy = createdBy;
+    }
+  }
+
+  private parseDate(dateInput: string | Date, dateType: 'start' | 'end'): Date {
+    const date =
+      typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+    if (isNaN(date.getTime())) {
+      throw new BadRequestException(`Invalid ${dateType} date format`);
+    }
+    return date;
+  }
+
+  private buildPaginationResult(
+    events: IEvent[],
+    total: number,
+    page: number,
+    limit: number,
+  ): EventPaginationResult {
+    return {
+      events,
+      totalCount: total,
+      currentPage: page,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   /**

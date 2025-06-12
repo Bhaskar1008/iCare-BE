@@ -1,10 +1,13 @@
 import type { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
 import logger from '@/common/utils/logger';
 
 type SendFunction = (body: unknown) => Response;
 
 const HTTP_CLIENT_ERROR_START = 400;
 const HTTP_SERVER_ERROR_START = 500;
+const BEARER_PREFIX_LENGTH = 7;
+const TOKEN_PREVIEW_LENGTH = 20;
 
 const sanitizeRequestBody = (
   body: Record<string, unknown>,
@@ -17,6 +20,62 @@ const sanitizeRequestBody = (
     }
   });
   return sanitizedBody;
+};
+
+const decodeJwtToken = (token: string): Record<string, unknown> | null => {
+  try {
+    // Decode JWT without verification (just to extract payload)
+    const decoded = jwt.decode(token) as Record<string, unknown>;
+    return decoded;
+  } catch (error) {
+    logger.warn('Failed to decode JWT token:', error);
+    return null;
+  }
+};
+
+const extractAndSetCurrentUser = (req: Request): void => {
+  try {
+    logger.debug('JWT Processing - Request details', {
+      url: req.url,
+      method: req.method,
+      hasAuthHeader: !!req.headers.authorization,
+      headerCount: Object.keys(req.headers).length,
+    });
+
+    const authHeader = req.headers.authorization;
+
+    if (authHeader?.startsWith('Bearer ')) {
+      logger.debug('Authorization header found, extracting token');
+      const token = authHeader.substring(BEARER_PREFIX_LENGTH);
+      logger.debug('Token details', {
+        length: token.length,
+        preview: `${token.substring(0, TOKEN_PREVIEW_LENGTH)}...`,
+      });
+
+      const decodedToken = decodeJwtToken(token);
+
+      if (decodedToken) {
+        // Set the currentUser header
+        req.headers.currentuser = JSON.stringify(decodedToken);
+
+        logger.debug('JWT Token decoded successfully', {
+          userId: decodedToken.id,
+          email: decodedToken.email,
+          role: decodedToken.role,
+          channelId: decodedToken.channelId,
+        });
+      } else {
+        logger.warn('Failed to decode JWT token');
+      }
+    } else {
+      logger.debug('No valid Authorization header found', {
+        authHeaderPresent: !!authHeader,
+        authHeaderValue: authHeader ? 'Bearer token expected' : 'Not provided',
+      });
+    }
+  } catch (error) {
+    logger.warn('Error processing JWT token:', error);
+  }
 };
 
 const logRequestResponse = (
@@ -75,6 +134,8 @@ export const requestLogger = (
 
     return originalSend(body);
   };
+
+  extractAndSetCurrentUser(req);
 
   next();
 };

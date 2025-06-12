@@ -14,7 +14,7 @@ const taskController = new TaskController();
 
 /**
  * @swagger
- * /api/user/task:
+ * /api/task:
  *   post:
  *     summary: Create a new task
  *     tags: [Tasks]
@@ -43,13 +43,13 @@ const taskController = new TaskController();
  *         description: Task created successfully
  */
 router.post(
-  '/task',
+  '/',
   taskController.createTask.bind(taskController) as unknown as RequestHandler,
 );
 
 /**
  * @swagger
- * /api/user/task:
+ * /api/task:
  *   put:
  *     summary: Update an existing task
  *     tags: [Tasks]
@@ -83,13 +83,13 @@ router.post(
  *         description: Task updated successfully
  */
 router.put(
-  '/task',
+  '/',
   taskController.updateTask.bind(taskController) as unknown as RequestHandler,
 );
 
 /**
  * @swagger
- * /api/user/task:
+ * /api/task:
  *   patch:
  *     summary: Archive a task
  *     tags: [Tasks]
@@ -104,13 +104,13 @@ router.put(
  *         description: Task archived successfully
  */
 router.patch(
-  '/task',
+  '/',
   taskController.archiveTask.bind(taskController) as unknown as RequestHandler,
 );
 
 /**
  * @swagger
- * /api/user/task:
+ * /api/task:
  *   get:
  *     summary: Get list of tasks
  *     tags: [Tasks]
@@ -125,13 +125,13 @@ router.patch(
  *         description: List of tasks retrieved successfully
  */
 router.get(
-  '/task',
+  '/',
   taskController.getTasks.bind(taskController) as unknown as RequestHandler,
 );
 
 /**
  * @swagger
- * /api/user/teamMembers:
+ * /api/task/teamMembers:
  *   get:
  *     summary: Get list of team members
  *     tags: [Tasks]

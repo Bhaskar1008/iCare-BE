@@ -1,0 +1,53 @@
+import {
+  IsString,
+  IsOptional,
+  IsIn,
+  Matches,
+  MaxLength,
+  IsMongoId,
+} from 'class-validator';
+import { Transform } from 'class-transformer';
+import { VALIDATION } from '@/common/constants/http-status.constants';
+
+export class UpdatePermissionResourceDto {
+  @IsOptional()
+  @IsString({ message: 'Resource name must be a string' })
+  @MaxLength(VALIDATION.MAX_RESOURCE_NAME_LENGTH, {
+    message: `Resource name cannot exceed ${VALIDATION.MAX_RESOURCE_NAME_LENGTH} characters`,
+  })
+  @Transform(({ value }: { value: string }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  name?: string;
+
+  @IsOptional()
+  @IsString({ message: 'Resource identifier must be a string' })
+  @MaxLength(VALIDATION.MAX_RESOURCE_IDENTIFIER_LENGTH, {
+    message: `Resource identifier cannot exceed ${VALIDATION.MAX_RESOURCE_IDENTIFIER_LENGTH} characters`,
+  })
+  @Matches(/^[a-z][a-z0-9._-]*$/, {
+    message:
+      'Identifier must start with a letter and contain only lowercase letters, numbers, dots, underscores, and hyphens',
+  })
+  @Transform(({ value }: { value: string }) =>
+    typeof value === 'string' ? value.trim().toLowerCase() : value,
+  )
+  identifier?: string;
+
+  @IsOptional()
+  @IsString({ message: 'Resource type must be a string' })
+  @IsIn(['module', 'api', 'page', 'ui', 'feature'], {
+    message: 'Type must be module, api, page, ui, or feature',
+  })
+  type?: 'module' | 'api' | 'page' | 'ui' | 'feature';
+
+  @IsOptional()
+  @IsMongoId({ message: 'Parent ID must be a valid MongoDB ObjectId' })
+  parentId?: string;
+
+  @IsOptional()
+  @IsIn(['active', 'inactive'], {
+    message: 'Status must be either "active" or "inactive"',
+  })
+  status?: 'active' | 'inactive';
+}

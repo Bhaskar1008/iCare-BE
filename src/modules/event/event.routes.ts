@@ -1,5 +1,9 @@
 import { Router } from 'express';
 import { EventController } from './event.controller';
+import { ValidationPipe } from '@/common/pipes/validation.pipe';
+import { CreateEventValidationDto } from './dto/create-event.dto';
+import { UpdateEventValidationDto } from './dto/update-event.dto';
+import { EventQueryDto } from './dto/event-query.dto';
 
 const router = Router();
 const eventController = new EventController();
@@ -97,9 +101,13 @@ const eventController = new EventController();
  *       401:
  *         description: Unauthorized
  */
-router.post('/', async (req, res) => {
-  await eventController.createEvent(req, res);
-});
+router.post(
+  '/',
+  ValidationPipe.validateBody(CreateEventValidationDto),
+  async (req, res) => {
+    await eventController.createEvent(req, res);
+  },
+);
 
 /**
  * @swagger
@@ -150,9 +158,13 @@ router.post('/', async (req, res) => {
  *       401:
  *         description: Unauthorized
  */
-router.get('/', async (req, res) => {
-  await eventController.getAllEvents(req, res);
-});
+router.get(
+  '/',
+  ValidationPipe.validateQuery(EventQueryDto),
+  async (req, res) => {
+    await eventController.getAllEvents(req, res);
+  },
+);
 
 /**
  * @swagger
@@ -264,9 +276,13 @@ router.get('/:id', async (req, res) => {
  *       401:
  *         description: Unauthorized
  */
-router.put('/:id', async (req, res) => {
-  await eventController.updateEvent(req, res);
-});
+router.put(
+  '/:id',
+  ValidationPipe.validateBody(UpdateEventValidationDto),
+  async (req, res) => {
+    await eventController.updateEvent(req, res);
+  },
+);
 
 /**
  * @swagger

@@ -305,6 +305,48 @@ router.get(
 
 /**
  * @swagger
+ * /api/hierarchies/hierarchyTeamMemberList:
+ *   get:
+ *     tags: [Hierarchies]
+ *     summary: Get hierarchy team member list
+ *     description: Retrieves hierarchies or team members based on current user and query parameters
+ *     parameters:
+ *       - in: query
+ *         name: teamMembers
+ *         schema:
+ *           type: boolean
+ *         description: If true, returns team members; otherwise returns hierarchies
+ *     responses:
+ *       200:
+ *         description: Data retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       oneOf:
+ *                         - type: array
+ *                           items:
+ *                             $ref: '#/components/schemas/HierarchyResponse'
+ *                         - type: array
+ *                           items:
+ *                             type: object
+ *                             description: Agent/Team member data
+ *       400:
+ *         description: Bad request - missing current user
+ *       500:
+ *         description: Internal server error
+ */
+router.get(
+  '/hierarchyTeamMemberList',
+  hierarchyController.getHierarchyTeamMemberList,
+);
+
+/**
+ * @swagger
  * /api/hierarchies/{id}:
  *   get:
  *     tags: [Hierarchies]

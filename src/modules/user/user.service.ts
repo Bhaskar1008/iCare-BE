@@ -5,8 +5,8 @@ import type { UpdateUserDto } from './dto/update-user.dto';
 import type {
   UserResponseDto,
   UserListResponseDto,
-  PaginationQueryDto,
 } from './dto/user-response.dto';
+import type { UserQueryDto } from './dto/user-query.dto';
 import type { IUser } from '@/models/user.model';
 import type { UpdateQuery, FilterQuery } from 'mongoose';
 import { DatabaseOperationException } from '@/common/exceptions/database.exception';
@@ -100,6 +100,29 @@ export class UserService implements IUserService {
       return this.mapToResponseDto(user);
     } catch (error) {
       logger.error('Failed to get user by email:', { error, email });
+      throw error;
+    }
+  }
+
+  public async getUserByAgentCode(
+    agentCode: string,
+    includeOtp = false,
+  ): Promise<UserResponseDto | null> {
+    try {
+      logger.debug('Getting user by agent code', { agentCode, includeOtp });
+      const user = await this.userRepository.findByAgentCode(
+        agentCode,
+        includeOtp,
+      );
+
+      if (!user) {
+        logger.debug('User not found', { agentCode });
+        return null;
+      }
+
+      return this.mapToResponseDto(user);
+    } catch (error) {
+      logger.error('Failed to get user by agent code:', { error, agentCode });
       throw error;
     }
   }
@@ -214,9 +237,7 @@ export class UserService implements IUserService {
     }
   }
 
-  public async getAllUsers(
-    query: PaginationQueryDto,
-  ): Promise<UserListResponseDto> {
+  public async getAllUsers(query: UserQueryDto): Promise<UserListResponseDto> {
     try {
       logger.debug('Getting all users with pagination', { query });
 
@@ -233,15 +254,17 @@ export class UserService implements IUserService {
 
       const response: UserListResponseDto = {
         users: result.users.map(user => this.mapToResponseDto(user)),
-        total: result.total,
-        page: result.page,
-        totalPages: result.totalPages,
-        limit,
+        pagination: {
+          total: result.total,
+          page: result.page,
+          totalPages: result.totalPages,
+          limit,
+        },
       };
 
       logger.debug('Users retrieved successfully', {
         count: response.users.length,
-        total: response.total,
+        total: response.pagination.total,
       });
 
       return response;
@@ -251,7 +274,7 @@ export class UserService implements IUserService {
     }
   }
 
-  private buildSearchFilter(query: PaginationQueryDto): SearchFilter {
+  private buildSearchFilter(query: UserQueryDto): SearchFilter {
     const filter: SearchFilter = {};
 
     if (query.isActive !== undefined) {
@@ -259,10 +282,11 @@ export class UserService implements IUserService {
     }
 
     if (query.search) {
+      const searchRegex = { $regex: query.search, $options: 'i' };
       filter.$or = [
-        { firstName: { $regex: query.search, $options: 'i' } },
-        { lastName: { $regex: query.search, $options: 'i' } },
-        { email: { $regex: query.search, $options: 'i' } },
+        { firstName: searchRegex },
+        { lastName: searchRegex },
+        { email: searchRegex },
       ];
     }
 
@@ -272,14 +296,15 @@ export class UserService implements IUserService {
   public async updateLastLogin(id: string): Promise<UserResponseDto | null> {
     try {
       logger.debug('Updating user last login', { id });
-      const updatedUser = await this.userRepository.updateLastLogin(id);
+      const user = await this.userRepository.updateLastLogin(id);
 
-      if (!updatedUser) {
+      if (!user) {
         logger.debug('User not found for last login update', { id });
         return null;
       }
 
-      return this.mapToResponseDto(updatedUser);
+      logger.info('User last login updated successfully', { id });
+      return this.mapToResponseDto(user);
     } catch (error) {
       logger.error('Failed to update user last login:', { error, id });
       throw error;
@@ -287,7 +312,7 @@ export class UserService implements IUserService {
   }
 
   private mapToResponseDto(user: IUser): UserResponseDto {
-    return {
+    const response: UserResponseDto & { otp?: string } = {
       id: user._id.toString(),
       email: user.email,
       firstName: user.firstName,
@@ -298,5 +323,12 @@ export class UserService implements IUserService {
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
+
+    // Include OTP if it exists in the user document
+    if ('otp' in user) {
+      response.otp = user.otp;
+    }
+
+    return response;
   }
 }

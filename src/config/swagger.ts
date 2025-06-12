@@ -27,9 +27,50 @@ const options: swaggerJsdoc.Options = {
         description: 'Production server',
       },
     ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'Enter JWT token in the format: Bearer <token>',
+        },
+      },
+      responses: {
+        UnauthorizedError: {
+          description: 'Access token is missing or invalid',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  success: {
+                    type: 'boolean',
+                    example: false,
+                  },
+                  message: {
+                    type: 'string',
+                    example: 'Unauthorized access',
+                  },
+                  timestamp: {
+                    type: 'string',
+                    format: 'date-time',
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    security: [
+      {
+        bearerAuth: [],
+      },
+    ],
     tags: [
       {
-        name: 'Auth',
+        name: 'Authentication',
         description: 'Authentication endpoints',
       },
       {
@@ -41,8 +82,32 @@ const options: swaggerJsdoc.Options = {
         description: 'Channel management endpoints',
       },
       {
-        name: 'Products',
-        description: 'Product management endpoints',
+        name: 'Roles',
+        description: 'Role management endpoints',
+      },
+      {
+        name: 'Permission Resources',
+        description: 'Permission resource management endpoints',
+      },
+      {
+        name: 'Events',
+        description: 'Event management endpoints',
+      },
+      {
+        name: 'Tasks',
+        description: 'Task management endpoints',
+      },
+      {
+        name: 'Hierarchies',
+        description: 'Hierarchy management endpoints',
+      },
+      {
+        name: 'Provinces',
+        description: 'Province and city management endpoints',
+      },
+      {
+        name: 'Business Commitments',
+        description: 'Business commitment management endpoints',
       },
     ],
     externalDocs: {

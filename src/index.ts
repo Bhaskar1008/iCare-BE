@@ -8,6 +8,7 @@ const config = {
   port: process.env.PORT ? parseInt(process.env.PORT, 10) : DEFAULT_PORT,
   environment: process.env.NODE_ENV ?? 'development',
   database: getDatabaseConfig(),
+  corsOrigin: process.env.CORS_ORIGIN ?? '*',
 };
 
 const app = new App(config);

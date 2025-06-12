@@ -105,9 +105,6 @@ designationSchema.index({ channelId: 1, hierarchyId: 1 });
 designationSchema.index({ channelId: 1, roleId: 1 });
 designationSchema.index({ roleId: 1, hierarchyId: 1 });
 
-designationSchema.index({ channelId: 1 });
-designationSchema.index({ roleId: 1 });
-designationSchema.index({ hierarchyId: 1 });
 designationSchema.index({ designationName: 1 });
 designationSchema.index({ designationCode: 1 });
 designationSchema.index({ designationStatus: 1 });

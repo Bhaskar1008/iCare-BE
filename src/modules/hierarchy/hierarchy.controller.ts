@@ -366,6 +366,96 @@ export class HierarchyController
     }
   };
 
+  public getHierarchyTeamMemberList = async (
+    req: Request,
+    res: Response,
+  ): Promise<void> => {
+    try {
+      const { teamMembers } = req.query;
+      const currentUserHeader = req.headers.currentuser as string;
+
+      this.logHierarchyTeamMemberRequest(teamMembers, currentUserHeader, req);
+
+      if (!currentUserHeader) {
+        this.sendBadRequest(res, 'Current user information is required');
+        return;
+      }
+
+      const { channelId, userId } =
+        this.extractCurrentUserData(currentUserHeader);
+
+      if (!channelId || !userId) {
+        this.sendBadRequest(res, 'Channel ID and User ID are required');
+        return;
+      }
+
+      const result = await this.hierarchyService.getHierarchyTeamMemberList(
+        channelId,
+        userId,
+        teamMembers === 'true',
+      );
+
+      this.logServiceResult(result);
+      this.sendSuccess(res, result, 'Data retrieved successfully');
+    } catch (error) {
+      this.handleHierarchyTeamMemberError(error, res);
+    }
+  };
+
+  private logHierarchyTeamMemberRequest(
+    teamMembers: unknown,
+    currentUserHeader: string,
+    req: Request,
+  ): void {
+    logger.debug('HierarchyTeamMemberList request received', {
+      teamMembers,
+      hasCurrentUserHeader: !!currentUserHeader,
+      authHeader: req.headers.authorization
+        ? 'Bearer token present'
+        : 'No auth header',
+    });
+  }
+
+  private extractCurrentUserData(currentUserHeader: string): {
+    channelId: string;
+    userId: string;
+  } {
+    const currentUser = JSON.parse(currentUserHeader);
+    const { channelId, id: userId } = currentUser;
+
+    logger.debug('Current user data extracted', {
+      currentUser,
+      channelId,
+      userId,
+    });
+
+    return {
+      channelId: String(channelId ?? ''),
+      userId: String(userId ?? ''),
+    };
+  }
+
+  private logServiceResult(result: unknown): void {
+    logger.debug('Service result', {
+      resultCount: Array.isArray(result) ? result.length : 'Not an array',
+      resultType: typeof result,
+    });
+  }
+
+  private handleHierarchyTeamMemberError(error: unknown, res: Response): void {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error('Failed to get hierarchy team member list:', {
+      error: err.message,
+      stack: err.stack,
+    });
+    this.sendError(
+      res,
+      'Failed to retrieve data',
+      HTTP_STATUS.INTERNAL_SERVER_ERROR,
+      err,
+    );
+  }
+
   public updateHierarchy = async (
     req: Request,
     res: Response,

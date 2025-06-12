@@ -11,7 +11,7 @@ export interface IEvent extends Document {
   location: Types.ObjectId;
   attendees: Types.ObjectId[];
   status: EventStatus;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }

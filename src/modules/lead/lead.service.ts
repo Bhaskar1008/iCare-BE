@@ -1,628 +1,627 @@
+import type { ILead } from '@/models/lead.model';
+import { Lead } from '@/models/lead.model';
+import { BaseService } from '@/services/base.service';
+import { BadRequestException } from '@/common/exceptions/bad-request.exception';
+import { NotFoundException } from '@/common/exceptions/not-found.exception';
+import { determineLeadStatus } from './lead.config';
+import type {
+  LeadProgress,
+  LeadDisposition,
+  LeadSubDisposition,
+} from './lead.config';
+import { AgentModel } from '@/models/agent.model';
 import { Types } from 'mongoose';
-import { LeadModel, type ILead } from '@/models/lead.model';
-import { LeadConfigurationModel } from '@/models/lead-configuration.model';
-import { LeadHistoryModel } from '@/models/lead-history.model';
+import { LeadHistory } from '@/models/lead-history.model';
+import type { ILeadHistory } from '@/models/lead-history.model';
 
-export class LeadService {
-  /**
-   * Find the matching lead status name based on progress, disposition, or subDisposition ID
-   */
-  private findLeadStatusName(config: any, id: string): string {
-    const matchingStatus = config.leadStatus.find((status: any) => 
-      status.enabled && (
-        status.relationships.progress.includes(id) ||
-        status.relationships.disposition.includes(id) ||
-        status.relationships.subDisposition.includes(id)
-      )
+interface StatusCount {
+  _id: string;
+  count: number;
+}
+
+interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+type LeadFilter =
+  | 'today'
+  | 'all'
+  | 'Open'
+  | 'Converted'
+  | 'Discarded'
+  | 'Failed';
+
+interface AdvancedFilterCriteria {
+  sortBy?:
+    | 'Lead Created date - Newest to oldest'
+    | 'Lead Created date - oldest to Newest';
+  searchType?: 'Name' | 'Mobile' | 'Lead ID';
+  name?: string;
+  leadStatus?: string;
+  leadType?: string;
+  leadProgress?: string;
+  leadDisposition?: string;
+  leadSubDisposition?: string;
+  createdBy: string;
+}
+
+interface HistoryChange {
+  field: string;
+  oldValue: unknown;
+  newValue: unknown;
+}
+
+class LeadService extends BaseService {
+  private async verifyUsers(userIds: Types.ObjectId[]): Promise<void> {
+    const agents = await AgentModel.find({
+      _id: { $in: userIds },
+      agentStatus: 'active',
+    });
+
+    const foundAgentIds = agents.map(a => a._id.toString());
+    const notFoundAgents = userIds.filter(
+      id => !foundAgentIds.includes(id.toString()),
     );
-    return matchingStatus?.name || '';
-  }
 
-  /**
-   * Convert name-based inputs to IDs and names using configuration
-   */
-  private async convertNamesToIds(data: Partial<ILead>, config: any) {
-    const newData = { ...data };
-    const relationships = {
-      progress: undefined as { id: string; name: string } | undefined,
-      disposition: undefined as { id: string; name: string } | undefined,
-      subDisposition: undefined as { id: string; name: string } | undefined
-    };
-
-    // Convert lead progress
-    if (data.leadProgress) {
-      const progressConfig = config.leadProgress.find(
-        (p: any) => p.name.toLowerCase() === data.leadProgress?.toLowerCase() && p.enabled
-      );
-      if (!progressConfig) {
-        throw new Error(`Invalid lead progress: ${data.leadProgress}`);
-      }
-      newData.leadProgress = progressConfig.id;
-      relationships.progress = {
-        id: progressConfig.id,
-        name: progressConfig.name
-      };
-    }
-
-    // Convert lead disposition
-    if (data.leadDisposition) {
-      const dispositionConfig = config.leadDisposition.find(
-        (d: any) => d.name.toLowerCase() === data.leadDisposition?.toLowerCase() && 
-                    d.enabled &&
-                    (newData.leadProgress ? d.progressId === newData.leadProgress : true)
-      );
-      if (!dispositionConfig) {
-        throw new Error(`Invalid lead disposition: ${data.leadDisposition}`);
-      }
-      newData.leadDisposition = dispositionConfig.id;
-      relationships.disposition = {
-        id: dispositionConfig.id,
-        name: dispositionConfig.name
-      };
-    }
-
-    // Convert lead sub-disposition
-    if (data.leadSubDisposition) {
-      const subDispositionConfig = config.leadSubDisposition.find(
-        (sd: any) => sd.name.toLowerCase() === data.leadSubDisposition?.toLowerCase() && 
-                     sd.enabled &&
-                     (newData.leadDisposition ? sd.dispositionId === newData.leadDisposition : true)
-      );
-      if (!subDispositionConfig) {
-        throw new Error(`Invalid lead sub-disposition: ${data.leadSubDisposition}`);
-      }
-      newData.leadSubDisposition = subDispositionConfig.id;
-      relationships.subDisposition = {
-        id: subDispositionConfig.id,
-        name: subDispositionConfig.name
-      };
-    }
-
-    return { convertedData: newData, relationships };
-  }
-
-  /**
-   * Create a new lead
-   */
-  public async createLead(data: Partial<ILead>) {
-    // Validate against lead configuration
-    const config = await LeadConfigurationModel.findOne({
-      productId: new Types.ObjectId(data.productId?.toString()),
-      isActive: true,
-      isDeleted: false
-    });
-
-    if (!config) {
-      throw new Error('Lead configuration not found for this product');
-    }
-
-    // Convert name-based inputs to IDs and get relationships
-    const { convertedData, relationships } = await this.convertNamesToIds(data, config);
-
-    const progressId = convertedData.leadProgress?.toString() || '';
-    
-    // Create current status object based on the relationships
-    const currentLeadStatus = {
-      id: progressId,
-      name: this.findLeadStatusName(config, progressId),
-      updatedAt: new Date(),
-      relationships
-    };
-    console.log(currentLeadStatus);
-    // Create the lead
-    const lead = new LeadModel({
-      ...convertedData,
-      productId: new Types.ObjectId(convertedData.productId?.toString()),
-      allocatedTo: new Types.ObjectId(convertedData.allocatedTo?.toString()),
-      allocatedBy: new Types.ObjectId(convertedData.allocatedBy?.toString()),
-      currentLeadStatus,
-      leadStatusHistory: [currentLeadStatus]
-    });
-
-    return lead.save();
-  }
-
-  /**
-   * Update an existing lead
-   */
-  public async updateLead(leadId: string, data: Partial<ILead>) {
-    const lead = await LeadModel.findById(leadId);
-    if (!lead) {
-      throw new Error('Lead not found');
-    }
-
-    // Get lead configuration
-    const config = await LeadConfigurationModel.findOne({
-      productId: lead.productId,
-      isActive: true,
-      isDeleted: false
-    });
-
-    if (!config) {
-      throw new Error('Lead configuration not found for this product');
-    }
-
-    // Validate required fields for update
-    const requiredFields = [
-      'dateOfBirth',
-      'gender',
-      'addressLine1',
-      'zipcode',
-      'education',
-      'professionType',
-      'incomeGroup',
-      'vehicleType'
-    ];
-
-    const missingFields = requiredFields.filter(field => {
-      // Check if the field is being updated or already exists
-      return !data[field as keyof ILead] && !lead[field as keyof ILead];
-    });
-
-    if (missingFields.length > 0) {
-      throw new Error(`Missing required fields for update: ${missingFields.join(', ')}`);
-    }
-
-    // Convert name-based inputs to IDs and get relationships
-    const { convertedData, relationships } = await this.convertNamesToIds(data, config);
-
-    // Merge with existing relationships
-    const mergedRelationships = {
-      progress: relationships.progress || lead.currentLeadStatus.relationships.progress,
-      disposition: relationships.disposition || lead.currentLeadStatus.relationships.disposition,
-      subDisposition: relationships.subDisposition || lead.currentLeadStatus.relationships.subDisposition
-    };
-
-    // Create new status if relationships changed
-    if (relationships.progress || relationships.disposition || relationships.subDisposition) {
-      const progressId = (convertedData.leadProgress || lead.currentLeadStatus.id)?.toString() || '';
-      
-      const newStatus = {
-        id: progressId,
-        name: this.findLeadStatusName(config, progressId),
-        updatedAt: new Date(),
-        relationships: mergedRelationships
-      };
-
-      // Update the lead with new status
-      return LeadModel.findByIdAndUpdate(
-        leadId,
-        {
-          $set: {
-            ...convertedData,
-            currentLeadStatus: newStatus,
-            updatedAt: new Date()
-          },
-          $push: { leadStatusHistory: newStatus }
-        },
-        { new: true, runValidators: true }
+    if (notFoundAgents.length > 0) {
+      throw new BadRequestException(
+        `Agents not found or inactive: ${notFoundAgents.join(', ')}`,
       );
     }
-
-    // If no relationship changes, just update other fields
-    return LeadModel.findByIdAndUpdate(
-      leadId,
-      {
-        $set: {
-          ...convertedData,
-          updatedAt: new Date()
-        }
-      },
-      { new: true, runValidators: true }
-    );
   }
 
-  /**
-   * Get a lead by ID
-   */
-  public async getLead(leadId: string) {
-    return LeadModel.findOne({
-      _id: new Types.ObjectId(leadId),
-      isDeleted: false
-    }).populate('allocatedTo', 'firstName lastName email');
+  private async trackChanges(
+    leadId: Types.ObjectId | string,
+    changedBy: Types.ObjectId | string,
+    changes: HistoryChange[],
+    changeType: 'CREATE' | 'UPDATE' | 'DELETE' = 'UPDATE',
+  ): Promise<void> {
+    const historyEntries = changes.map(change => ({
+      leadId: new Types.ObjectId(leadId),
+      field: change.field,
+      oldValue: change.oldValue,
+      newValue: change.newValue,
+      changedBy: new Types.ObjectId(changedBy),
+      changeType,
+    }));
+
+    await LeadHistory.insertMany(historyEntries);
   }
 
-  async getLeads(params: {
-    allocatedTo: string;
-    page: number;
-    limit: number;
-    stage?: string;
-    leadProgress?: string;
-    leadType?: string;
-    startDate?: string;
-    endDate?: string;
-    searchTerm?: string;
-  }): Promise<{
-    leads: ILead[];
-    total: number;
-    page: number;
-    totalPages: number;
-  }> {
-    const {
-      allocatedTo,
-      page,
-      limit,
-      stage,
-      leadProgress,
-      leadType,
-      startDate,
-      endDate,
-      searchTerm
-    } = params;
-
-    const query: any = {
-      allocatedTo: new Types.ObjectId(allocatedTo),
-      isDeleted: false
-    };
-
-    // Add filters if provided
-    if (stage) query.stage = stage;
-    if (leadProgress) query.leadProgress = leadProgress;
-    if (leadType) query.leadType = leadType;
-    
-    // Date range filter
-    if (startDate || endDate) {
-      query.createdAt = {};
-      if (startDate) query.createdAt.$gte = new Date(startDate);
-      if (endDate) query.createdAt.$lte = new Date(endDate);
-    }
-
-    // Search filter
-    if (searchTerm) {
-      query.$or = [
-        { firstName: { $regex: searchTerm, $options: 'i' } },
-        { lastName: { $regex: searchTerm, $options: 'i' } },
-        { primaryNumber: { $regex: searchTerm, $options: 'i' } },
-        { emailAddress: { $regex: searchTerm, $options: 'i' } }
-      ];
-    }
-
-    const skip = (page - 1) * limit;
-
-    const [leads, total] = await Promise.all([
-      LeadModel.find(query)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .populate('productId', 'name')
-        .populate('allocatedTo', 'firstName lastName email'),
-      LeadModel.countDocuments(query)
-    ]);
-
-    return {
-      leads,
-      total,
-      page,
-      totalPages: Math.ceil(total / limit)
-    };
-  }
-
-  /**
-   * Soft delete a lead
-   */
-  public async deleteLead(leadId: string) {
-    return LeadModel.findByIdAndUpdate(
-      leadId,
-      {
-        $set: {
-          isDeleted: true,
-          deletedAt: new Date()
-        }
-      },
-      { new: true }
-    );
-  }
-
-  /**
-   * Change the ownership of leads
-   */
-  public async changeOwnership(params: {
-    leadIds: string[];
-    newOwnerId: string;
-    changedBy: string;
-    remarks?: string;
-  }) {
-    const { leadIds, newOwnerId, changedBy, remarks } = params;
-
-    // Validate IDs
-    if (!Types.ObjectId.isValid(newOwnerId)) {
-      throw new Error('Invalid new owner ID');
-    }
-
-    if (!Types.ObjectId.isValid(changedBy)) {
-      throw new Error('Invalid changed by user ID');
-    }
-
-    const validLeadIds = leadIds.filter(id => Types.ObjectId.isValid(id));
-    if (validLeadIds.length === 0) {
-      throw new Error('No valid lead IDs provided');
-    }
-
-    // Find all leads to be updated
-    const leads = await LeadModel.find({
-      _id: { $in: validLeadIds.map(id => new Types.ObjectId(id)) },
-      isDeleted: false
-    });
-
-    if (leads.length === 0) {
-      throw new Error('No leads found for the provided IDs');
-    }
-
-    const session = await LeadModel.startSession();
-    session.startTransaction();
-
+  public async createLead(data: Partial<ILead>): Promise<ILead> {
     try {
-      const updatePromises = leads.map(async (lead) => {
-        // Create history record for ownership change
-        const ownershipHistory = new LeadHistoryModel({
-          leadId: lead._id,
-          changeType: 'OWNERSHIP_CHANGE',
-          changedBy: new Types.ObjectId(changedBy),
-          changes: [{
-            field: 'allocatedTo',
-            oldValue: lead.allocatedTo,
-            newValue: new Types.ObjectId(newOwnerId)
-          }],
-          remarks
-        });
+      // Verify all users exist and are active
+      await this.verifyUsers(
+        [data.allocatedTo, data.allocatedBy, data.createdBy].filter(
+          (id): id is Types.ObjectId => id !== undefined,
+        ),
+      );
 
-        // Create history record for allocation change
-        const allocationHistory = new LeadHistoryModel({
-          leadId: lead._id,
-          changeType: 'ALLOCATION_CHANGE',
-          changedBy: new Types.ObjectId(changedBy),
-          changes: [
-            {
-              field: 'allocatedTo',
-              oldValue: lead.allocatedTo,
-              newValue: new Types.ObjectId(newOwnerId)
-            },
-            {
-              field: 'allocatedBy',
-              oldValue: lead.allocatedBy,
-              newValue: new Types.ObjectId(changedBy)
-            },
-            {
-              field: 'allocatedAt',
-              oldValue: lead.allocatedAt,
-              newValue: new Date()
-            }
-          ],
-          remarks
-        });
+      // Determine initial lead status
+      const status = determineLeadStatus(
+        data.leadProgress as LeadProgress,
+        data.leadDisposition as LeadDisposition,
+        data.leadSubDisposition as LeadSubDisposition,
+      );
 
-        // Update lead
-        const updatedLead = await LeadModel.findByIdAndUpdate(
-          lead._id,
-          {
-            $set: {
-              allocatedTo: new Types.ObjectId(newOwnerId),
-              allocatedBy: new Types.ObjectId(changedBy),
-              allocatedAt: new Date(),
-              updatedAt: new Date()
-            }
-          },
-          { new: true, session }
+      // Set the current status and initialize history
+      const leadData: Partial<ILead> = {
+        ...data,
+        currentLeadStatus: status,
+        leadStatusHistory: [status],
+      };
+
+      const lead = new Lead(leadData);
+      const savedLead = await lead.save();
+
+      // Track all initial values in history
+      const changes: HistoryChange[] = Object.entries(leadData).map(
+        ([field, value]) => ({
+          field,
+          oldValue: null,
+          newValue: value,
+        }),
+      );
+
+      await this.trackChanges(
+        savedLead._id,
+        data.createdBy as Types.ObjectId,
+        changes,
+        'CREATE',
+      );
+
+      return savedLead;
+    } catch (error) {
+      throw new BadRequestException((error as Error).message);
+    }
+  }
+
+  public async updateLead(id: string, data: Partial<ILead>): Promise<ILead> {
+    try {
+      const lead = await Lead.findById(id);
+      if (!lead) {
+        throw new NotFoundException('Lead not found');
+      }
+
+      // If any user IDs are being updated, verify them
+      const userIdsToVerify: Types.ObjectId[] = [];
+      if (data.allocatedTo) userIdsToVerify.push(data.allocatedTo);
+      if (data.allocatedBy) userIdsToVerify.push(data.allocatedBy);
+      if (data.createdBy) userIdsToVerify.push(data.createdBy);
+
+      if (userIdsToVerify.length > 0) {
+        await this.verifyUsers(userIdsToVerify);
+      }
+
+      // Track changes before updating
+      const changes: HistoryChange[] = Object.entries(data).map(
+        ([field, newValue]) => ({
+          field,
+          oldValue: lead.get(field),
+          newValue,
+        }),
+      );
+
+      // If status-related fields are being updated
+      if (
+        data.leadProgress ||
+        data.leadDisposition ||
+        data.leadSubDisposition
+      ) {
+        const newStatus = determineLeadStatus(
+          (data.leadProgress ?? lead.leadProgress) as LeadProgress,
+          (data.leadDisposition ?? lead.leadDisposition) as LeadDisposition,
+          (data.leadSubDisposition ??
+            lead.leadSubDisposition) as LeadSubDisposition,
         );
 
-        await Promise.all([
-          ownershipHistory.save({ session }),
-          allocationHistory.save({ session })
-        ]);
+        // Update current status and add to history
+        data.currentLeadStatus = newStatus;
+        if (!lead.leadStatusHistory) {
+          lead.leadStatusHistory = [];
+        }
+        lead.leadStatusHistory.push(newStatus);
+        data.leadStatusHistory = lead.leadStatusHistory;
 
-        return updatedLead;
-      });
+        // Add status change to history tracking
+        changes.push({
+          field: 'currentLeadStatus',
+          oldValue: lead.currentLeadStatus,
+          newValue: newStatus,
+        });
+      }
 
-      const updatedLeads = await Promise.all(updatePromises);
-      await session.commitTransaction();
+      const updatedLead = await Lead.findByIdAndUpdate(id, data, {
+        new: true,
+      }).populate([
+        { path: 'allocatedTo', select: 'firstName lastName email agentCode' },
+        { path: 'allocatedBy', select: 'firstName lastName email agentCode' },
+        { path: 'createdBy', select: 'firstName lastName email agentCode' },
+      ]);
 
-      return {
-        message: 'Ownership changed successfully',
-        updatedLeads,
-        totalUpdated: updatedLeads.length
-      };
+      if (!updatedLead) {
+        throw new NotFoundException('Lead not found after update');
+      }
+
+      // Track all changes in history
+      await this.trackChanges(
+        updatedLead._id,
+        (data.createdBy as Types.ObjectId) || lead.createdBy,
+        changes,
+      );
+
+      return updatedLead;
     } catch (error) {
-      await session.abortTransaction();
-      throw error;
-    } finally {
-      session.endSession();
+      throw new BadRequestException((error as Error).message);
     }
   }
 
-  /**
-   * Get lead counts by status
-   */
-  public async getLeadStatusCounts(userId: string) {
-    if (!Types.ObjectId.isValid(userId)) {
-      throw new Error('Invalid user ID');
-    }
+  public async changeLeadOwnership(
+    leadId: string,
+    newAllocatedTo: Types.ObjectId,
+    newAllocatedBy: Types.ObjectId,
+  ): Promise<ILead> {
+    try {
+      await this.verifyUsers([newAllocatedTo, newAllocatedBy]);
 
-    const userObjectId = new Types.ObjectId(userId);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    const baseQuery = {
-      $or: [
-        { allocatedTo: userObjectId },
-        { createdBy: userObjectId }
-      ],
-      isDeleted: false
-    };
-
-    // Get all leads count
-    const allLeadsCount = await LeadModel.countDocuments(baseQuery);
-
-    // Get today's leads count
-    const todayLeadsCount = await LeadModel.countDocuments({
-      ...baseQuery,
-      createdAt: {
-        $gte: today,
-        $lt: tomorrow
+      const lead = await Lead.findById(leadId);
+      if (!lead) {
+        throw new NotFoundException('Lead not found');
       }
-    });
 
-    // Get counts by current status with detailed information
-    const statusCounts = await LeadModel.aggregate([
-      {
-        $match: baseQuery
-      },
-      {
-        $group: {
-          _id: '$currentLeadStatus.name',
-          count: { $sum: 1 },
-          leads: {
-            $push: {
-              id: '$_id',
-              firstName: '$firstName',
-              lastName: '$lastName',
-              stage: '$stage',
-              leadProgress: '$leadProgress',
-              updatedAt: '$updatedAt'
-            }
-          }
-        }
-      },
-      {
-        $project: {
-          _id: 0,
-          status: '$_id',
-          count: 1,
-          leads: {
-            $slice: ['$leads', 5] // Return only first 5 leads per status for preview
-          },
-          lastUpdated: {
-            $max: '$leads.updatedAt'
-          }
-        }
-      },
-      {
-        $sort: {
-          'lastUpdated': -1
-        }
-      }
-    ]);
-
-    // Format the response with default and dynamic statuses
-    const response = {
-      summary: {
-        total: allLeadsCount,
-        today: todayLeadsCount
-      },
-      defaultStatuses: {
-        All: {
-          count: allLeadsCount,
-          description: 'Total leads allocated or created'
+      const changes: HistoryChange[] = [
+        {
+          field: 'allocatedTo',
+          oldValue: lead.allocatedTo,
+          newValue: newAllocatedTo,
         },
-        'For Today': {
-          count: todayLeadsCount,
-          description: 'Leads created or allocated today'
-        }
-      },
-      dynamicStatuses: statusCounts.reduce((acc: any, status) => {
-        if (status.status) {
-          acc[status.status] = {
-            count: status.count,
-            recentLeads: status.leads,
-            lastUpdated: status.lastUpdated
-          };
-        }
-        return acc;
-      }, {})
-    };
+        {
+          field: 'allocatedBy',
+          oldValue: lead.allocatedBy,
+          newValue: newAllocatedBy,
+        },
+        {
+          field: 'allocatedAt',
+          oldValue: lead.allocatedAt,
+          newValue: new Date(),
+        },
+      ];
 
-    return response;
+      // Update ownership
+      const updatedLead = await Lead.findByIdAndUpdate(
+        leadId,
+        {
+          allocatedTo: newAllocatedTo,
+          allocatedBy: newAllocatedBy,
+          allocatedAt: new Date(),
+        },
+        { new: true },
+      ).populate([
+        { path: 'allocatedTo', select: 'firstName lastName email agentCode' },
+        { path: 'allocatedBy', select: 'firstName lastName email agentCode' },
+        { path: 'createdBy', select: 'firstName lastName email agentCode' },
+      ]);
+
+      if (!updatedLead) {
+        throw new NotFoundException('Lead not found after update');
+      }
+
+      // Track changes in history
+      await this.trackChanges(updatedLead._id, newAllocatedBy, changes);
+
+      return updatedLead;
+    } catch (error) {
+      throw new BadRequestException((error as Error).message);
+    }
   }
 
-  /**
-   * Get leads by status and user ID
-   */
-  public async getLeadsByStatus(params: {
-    status: string;
-    userId: string;
-    page: number;
-    limit: number;
-    sortBy?: string;
-    sortOrder?: 'asc' | 'desc';
-  }) {
-    const { status, userId, page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc' } = params;
+  public async getFilteredLeads(
+    filter: LeadFilter,
+    page = 1,
+    limit = 10,
+    createdBy?: string,
+  ): Promise<PaginatedResponse<ILead>> {
+    try {
+      const query: Record<string, unknown> = {};
 
-    if (!Types.ObjectId.isValid(userId)) {
-      throw new Error('Invalid user ID');
-    }
-
-    const userObjectId = new Types.ObjectId(userId);
-    let query: any = {
-      $or: [
-        { allocatedTo: userObjectId },
-        { createdBy: userObjectId }
-      ],
-      isDeleted: false
-    };
-
-    // Handle special status cases
-    switch (status.toLowerCase()) {
-      case 'all':
-        // No additional filters needed
-        break;
-      case 'today':
+      // Apply filter
+      if (filter === 'today') {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
+
         query.createdAt = {
           $gte: today,
-          $lt: tomorrow
+          $lt: tomorrow,
         };
-        break;
-      default:
-        // For regular status values, match against currentLeadStatus.name
-        query['currentLeadStatus.name'] = status;
-    }
-
-    const skip = (page - 1) * limit;
-    const sortOptions: any = {
-      [sortBy]: sortOrder === 'asc' ? 1 : -1
-    };
-
-    const [leads, total] = await Promise.all([
-      LeadModel.find(query)
-        .sort(sortOptions)
-        .skip(skip)
-        .limit(limit)
-        .populate('productId', 'name')
-        .populate('allocatedTo', 'firstName lastName email')
-        .populate('allocatedBy', 'firstName lastName email')
-        .lean(),
-      LeadModel.countDocuments(query)
-    ]);
-
-    // Enhance the response with additional metadata
-    const enhancedLeads = leads.map(lead => ({
-      ...lead,
-      statusAge: {
-        days: Math.floor((Date.now() - new Date(lead.currentLeadStatus.updatedAt).getTime()) / (1000 * 60 * 60 * 24)),
-        lastUpdated: lead.currentLeadStatus.updatedAt
+      } else if (filter !== 'all') {
+        // If filter is a status (Open, Converted, etc.)
+        query['currentLeadStatus.name'] = filter;
       }
-    }));
 
-    return {
-      leads: enhancedLeads,
-      pagination: {
+      // Add agent filter - check if agent is either creator or allocator
+      if (createdBy) {
+        query.$or = [
+          { createdBy: new Types.ObjectId(createdBy) },
+          { allocatedBy: new Types.ObjectId(createdBy) },
+        ];
+      }
+
+      // Calculate skip value for pagination
+      const skip = (page - 1) * limit;
+
+      // Execute count and find queries in parallel
+      const [total, leads] = await Promise.all([
+        Lead.countDocuments(query),
+        Lead.find(query)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit)
+          .populate([
+            {
+              path: 'allocatedTo',
+              select: 'firstName lastName email agentCode',
+            },
+            {
+              path: 'allocatedBy',
+              select: 'firstName lastName email agentCode',
+            },
+            { path: 'createdBy', select: 'firstName lastName email agentCode' },
+          ]),
+      ]);
+
+      return {
+        data: leads,
         total,
         page,
+        limit,
         totalPages: Math.ceil(total / limit),
-        hasMore: skip + leads.length < total
+      };
+    } catch (error) {
+      throw new BadRequestException((error as Error).message);
+    }
+  }
+
+  public async getLeadHistory(
+    leadId: string,
+    page = 1,
+    limit = 10,
+  ): Promise<PaginatedResponse<ILeadHistory>> {
+    try {
+      const query = { leadId: new Types.ObjectId(leadId) };
+      const skip = (page - 1) * limit;
+
+      const [total, history] = await Promise.all([
+        LeadHistory.countDocuments(query),
+        LeadHistory.find(query)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit)
+          .populate('changedBy', 'firstName lastName email'),
+      ]);
+
+      return {
+        data: history,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      };
+    } catch (error) {
+      throw new BadRequestException((error as Error).message);
+    }
+  }
+
+  public async getLead(id: string): Promise<ILead> {
+    const lead = await Lead.findById(id).populate([
+      { path: 'allocatedTo', select: 'firstName lastName email agentCode' },
+      { path: 'allocatedBy', select: 'firstName lastName email agentCode' },
+      { path: 'createdBy', select: 'firstName lastName email agentCode' },
+    ]);
+
+    if (!lead) {
+      throw new NotFoundException('Lead not found');
+    }
+    return lead;
+  }
+
+  public async getStatusCount(id: string): Promise<any> {
+    const statusCount = await Lead.aggregate([
+      {
+        $match: {
+          $or: [
+            { allocatedTo: new Types.ObjectId(id) },
+            { createdBy: new Types.ObjectId(id) },
+          ],
+        },
       },
-      summary: {
-        totalCount: total,
-        status,
-        averageAge: total > 0 ? 
-          Math.floor(enhancedLeads.reduce((acc, lead) => acc + lead.statusAge.days, 0) / total) : 
-          0
+      {
+        $addFields: {
+          isToday: {
+            $eq: [
+              { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+              { $dateToString: { format: '%Y-%m-%d', date: new Date() } },
+            ],
+          },
+        },
+      },
+      {
+        $facet: {
+          statusCounts: [
+            {
+              $match: {
+                'currentLeadStatus.name': { $ne: null }, // Changed from currentLeadStatus.0.name
+              },
+            },
+            {
+              $group: {
+                _id: '$currentLeadStatus.name', // Changed from currentLeadStatus.0.name
+                count: { $sum: 1 },
+              },
+            },
+          ],
+          totalCount: [{ $count: 'total' }],
+          todayCount: [{ $match: { isToday: true } }, { $count: 'today' }],
+        },
+      },
+      {
+        $project: {
+          result: {
+            $mergeObjects: [
+              {
+                $arrayToObject: {
+                  $map: {
+                    input: '$statusCounts',
+                    as: 'status',
+                    in: {
+                      k: '$$status._id',
+                      v: '$$status.count',
+                    },
+                  },
+                },
+              },
+              {
+                All: {
+                  $ifNull: [{ $arrayElemAt: ['$totalCount.total', 0] }, 0],
+                },
+              },
+              {
+                'For Today': {
+                  $ifNull: [{ $arrayElemAt: ['$todayCount.today', 0] }, 0],
+                },
+              },
+            ],
+          },
+        },
+      },
+      {
+        $replaceRoot: { newRoot: '$result' },
+      },
+    ]);
+    if (!statusCount) {
+      throw new NotFoundException('Status count not found');
+    }
+    return statusCount;
+  }
+
+  public async getLeadStatusCounts(
+    userId: string,
+  ): Promise<Record<string, number>> {
+    const counts = await Lead.aggregate<StatusCount>([
+      { $match: { allocatedTo: userId } },
+      { $group: { _id: '$currentLeadStatus.name', count: { $sum: 1 } } },
+    ]);
+    return counts.reduce(
+      (acc: Record<string, number>, curr: StatusCount) => ({
+        ...acc,
+        [curr._id]: curr.count,
+      }),
+      {},
+    );
+  }
+
+  public async verifyLead(
+    emailAddress: string,
+    primaryNumber: string,
+  ): Promise<ILead | null> {
+    const lead = await Lead.findOne({
+      $or: [{ emailAddress }, { primaryNumber }],
+    });
+    if (lead) {
+      return lead;
+    }
+    return null;
+  }
+
+  public async getAdvancedFilteredLeads(
+    criteria: AdvancedFilterCriteria,
+    page = 1,
+    limit = 10,
+  ): Promise<PaginatedResponse<ILead>> {
+    try {
+      const query: Record<string, any> = {};
+
+      const andFilters: any[] = [];
+
+      // Handle search by type
+      if (criteria.searchType && criteria.name) {
+        switch (criteria.searchType) {
+          case 'Name': {
+            const nameParts = criteria.name.split(' ');
+            const nameQuery =
+              nameParts.length > 1
+                ? [
+                    {
+                      $and: [
+                        { firstName: { $regex: nameParts[0], $options: 'i' } },
+                        { lastName: { $regex: nameParts[1], $options: 'i' } },
+                      ],
+                    },
+                    {
+                      $and: [
+                        { firstName: { $regex: nameParts[1], $options: 'i' } },
+                        { lastName: { $regex: nameParts[0], $options: 'i' } },
+                      ],
+                    },
+                  ]
+                : [
+                    { firstName: { $regex: criteria.name, $options: 'i' } },
+                    { lastName: { $regex: criteria.name, $options: 'i' } },
+                  ];
+
+            // Add name $or condition as mandatory
+            andFilters.push({ $or: nameQuery });
+            break;
+          }
+
+          case 'Mobile': {
+            query.primaryNumber = { $regex: criteria.name };
+            break;
+          }
+
+          case 'Lead ID': {
+            if (Types.ObjectId.isValid(criteria.name)) {
+              query._id = new Types.ObjectId(criteria.name);
+            }
+            break;
+          }
+        }
       }
-    };
+
+      if (criteria.createdBy) {
+        andFilters.push({
+          $or: [
+            { createdBy: new Types.ObjectId(criteria.createdBy) },
+            { allocatedTo: new Types.ObjectId(criteria.createdBy) },
+          ],
+        });
+      }
+      if (criteria.leadStatus) {
+        query['currentLeadStatus.name'] = criteria.leadStatus;
+      }
+      if (criteria.leadType) {
+        query.leadType = criteria.leadType;
+      }
+      if (criteria.leadProgress) {
+        query.leadProgress = criteria.leadProgress;
+      }
+      if (criteria.leadDisposition) {
+        query.leadDisposition = criteria.leadDisposition;
+      }
+      if (criteria.leadSubDisposition) {
+        query.leadSubDisposition = criteria.leadSubDisposition;
+      }
+
+      // Combine $and conditions into main query
+      if (andFilters.length) {
+        query.$and = andFilters;
+      }
+
+      // Pagination
+      const skip = (page - 1) * limit;
+
+      // Sort order
+      const sortOrder =
+        criteria.sortBy === 'Lead Created date - oldest to Newest' ? 1 : -1;
+
+      // Fetch data
+      const [total, leads] = await Promise.all([
+        Lead.countDocuments(query),
+        Lead.find(query)
+          .sort({ createdAt: sortOrder })
+          .skip(skip)
+          .limit(limit)
+          .populate([
+            {
+              path: 'allocatedTo',
+              select: 'firstName lastName email agentCode',
+            },
+            {
+              path: 'allocatedBy',
+              select: 'firstName lastName email agentCode',
+            },
+            {
+              path: 'createdBy',
+              select: 'firstName lastName email agentCode',
+            },
+          ]),
+      ]);
+
+      return {
+        data: leads,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      };
+    } catch (error) {
+      throw new BadRequestException((error as Error).message);
+    }
   }
 }
 

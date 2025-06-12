@@ -7,9 +7,7 @@ import logger from '@/common/utils/logger';
 import type { CreateEventDto } from './dto/create-event.dto';
 import type { UpdateEventDto } from './dto/update-event.dto';
 
-interface ErrorWithMessage {
-  message: string;
-}
+// Remove this interface as we'll use proper error handling
 
 export class EventController
   extends BaseController
@@ -51,12 +49,21 @@ export class EventController
       const location = await this.locationService.createLocation(
         requestBody.location,
       );
-      const eventData = { ...requestBody, location: location._id };
+
+      if (!location) {
+        this.sendError(res, 'Failed to create location');
+        return;
+      }
+
+      const eventData: CreateEventDto = {
+        ...requestBody,
+        location: location._id as typeof requestBody.location,
+      };
       const newEvent = await this.eventService.createEvent(eventData);
       this.sendCreated(res, newEvent);
     } catch (error) {
       logger.error('Error creating event', { error });
-      const err = error as ErrorWithMessage;
+      const err = error instanceof Error ? error : new Error(String(error));
       this.sendError(res, err.message);
     }
   }
@@ -66,7 +73,7 @@ export class EventController
       const events = await this.eventService.getAllEvents(req.query);
       this.sendSuccess(res, events);
     } catch (error) {
-      const err = error as ErrorWithMessage;
+      const err = error instanceof Error ? error : new Error(String(error));
       this.sendError(res, err.message);
     }
   }
@@ -83,7 +90,7 @@ export class EventController
 
       this.sendSuccess(res, event);
     } catch (error) {
-      const err = error as ErrorWithMessage;
+      const err = error instanceof Error ? error : new Error(String(error));
       this.sendError(res, err.message);
     }
   }
@@ -102,7 +109,7 @@ export class EventController
 
       this.sendSuccess(res, updatedEvent);
     } catch (error) {
-      const err = error as ErrorWithMessage;
+      const err = error instanceof Error ? error : new Error(String(error));
       this.sendError(res, err.message);
     }
   }
@@ -122,7 +129,7 @@ export class EventController
 
       this.sendSuccess(res, { message: 'Event deleted successfully' });
     } catch (error) {
-      const err = error as ErrorWithMessage;
+      const err = error instanceof Error ? error : new Error(String(error));
       this.sendError(res, err.message);
     }
   }

@@ -4,4 +4,5 @@ export interface IAppConfig {
   port: number;
   environment: string;
   database: IDatabaseConfig;
+  corsOrigin?: string | string[];
 }

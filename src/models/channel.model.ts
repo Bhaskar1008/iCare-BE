@@ -59,7 +59,6 @@ const channelSchema = new Schema<IChannel>(
 );
 
 channelSchema.index({ channelName: 1 });
-channelSchema.index({ channelCode: 1 });
 channelSchema.index({ channelStatus: 1 });
 channelSchema.index({ isDeleted: 1 });
 channelSchema.index({ createdAt: -1 });

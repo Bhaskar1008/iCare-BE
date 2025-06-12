@@ -2,16 +2,19 @@ import type { Types } from 'mongoose';
 import { Schema, model } from 'mongoose';
 import type { IBaseModel } from './base.model';
 
-const ROLE_NAME_MAX_LENGTH = 100;
-const ROLE_CODE_MAX_LENGTH = 50;
-const ROLE_DESCRIPTION_MAX_LENGTH = 500;
+// Constants to replace magic numbers
+const MAX_ROLE_NAME_LENGTH = 100;
+const MIN_ROLE_CODE = 1;
+const MAX_ROLE_CODE = 999999;
+const MAX_DESCRIPTION_LENGTH = 500;
 
 export interface IRole extends IBaseModel {
   channelId: Types.ObjectId;
-  name: string;
-  code: string;
+  roleName: string;
+  roleCode: number;
   description?: string;
   permissions: Types.ObjectId[];
+  isSystem: boolean;
   status: 'active' | 'inactive';
 }
 
@@ -23,44 +26,40 @@ const roleSchema = new Schema<IRole>(
       required: [true, 'Channel ID is required'],
       index: true,
     },
-    name: {
+    roleName: {
       type: String,
       required: [true, 'Role name is required'],
       trim: true,
+      unique: true,
       maxlength: [
-        ROLE_NAME_MAX_LENGTH,
-        `Role name cannot exceed ${ROLE_NAME_MAX_LENGTH} characters`,
+        MAX_ROLE_NAME_LENGTH,
+        'Role name cannot exceed 100 characters',
       ],
     },
-    code: {
-      type: String,
+    roleCode: {
+      type: Number,
       required: [true, 'Role code is required'],
-      trim: true,
-      lowercase: true,
-      maxlength: [
-        ROLE_CODE_MAX_LENGTH,
-        `Role code cannot exceed ${ROLE_CODE_MAX_LENGTH} characters`,
-      ],
-      match: [
-        /^[a-z0-9_-]+$/,
-        'Role code can only contain lowercase letters, numbers, underscores, and hyphens',
-      ],
+      min: [MIN_ROLE_CODE, 'Role code must be positive'],
+      max: [MAX_ROLE_CODE, 'Role code cannot exceed 999999'],
     },
     description: {
       type: String,
       trim: true,
       maxlength: [
-        ROLE_DESCRIPTION_MAX_LENGTH,
-        `Description cannot exceed ${ROLE_DESCRIPTION_MAX_LENGTH} characters`,
+        MAX_DESCRIPTION_LENGTH,
+        'Description cannot exceed 500 characters',
       ],
     },
     permissions: [
       {
         type: Schema.Types.ObjectId,
         ref: 'Permission',
-        index: true,
       },
     ],
+    isSystem: {
+      type: Boolean,
+      default: false,
+    },
     status: {
       type: String,
       required: [true, 'Status is required'],
@@ -85,16 +84,10 @@ const roleSchema = new Schema<IRole>(
   },
 );
 
-roleSchema.index({ channelId: 1, code: 1 }, { unique: true });
-
-roleSchema.index({ channelId: 1 });
-roleSchema.index({ name: 1 });
-roleSchema.index({ code: 1 });
+roleSchema.index({ roleCode: 1 });
 roleSchema.index({ status: 1 });
+roleSchema.index({ isSystem: 1 });
 roleSchema.index({ isDeleted: 1 });
-roleSchema.index({ createdAt: -1 });
-
-roleSchema.index({ channelId: 1, status: 1, isDeleted: 1 });
 
 roleSchema.set('toJSON', { virtuals: true });
 roleSchema.set('toObject', { virtuals: true });
