@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { AgentController } from '@/modules/agent/agent.controller';
+import { AgentController } from './agent.controller';
 import { ValidationPipe } from '@/common/pipes/validation.pipe';
 import { CreateAgentDto } from '@/modules/agent/dto/create-agent.dto';
 import { AgentQueryDto } from '@/modules/agent/dto/agent-query.dto';
@@ -445,48 +445,6 @@ router.get('/channel/:channelId', agentController.getAgentsByChannelId);
 
 /**
  * @swagger
- * /api/agents/{id}:
- *   get:
- *     tags: [Agents]
- *     summary: Get agent by ID
- *     description: Retrieves an agent by their unique ID
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: ID of the agent to retrieve
- *     responses:
- *       200:
- *         description: Agent retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/AgentResponse'
- *       404:
- *         description: Agent not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.get('/:id', agentController.getAgentById);
-
-/**
- * @swagger
  * /api/agents/code/{code}:
  *   get:
  *     tags: [Agents]
@@ -569,5 +527,47 @@ router.get('/code/:code', agentController.getAgentByCode);
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get('/user/:userId', agentController.getAgentsByUserId);
+
+/**
+ * @swagger
+ * /api/agents/{id}:
+ *   get:
+ *     tags: [Agents]
+ *     summary: Get agent by ID
+ *     description: Retrieves an agent by their unique ID
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: ID of the agent to retrieve
+ *     responses:
+ *       200:
+ *         description: Agent retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       $ref: '#/components/schemas/AgentResponse'
+ *       404:
+ *         description: Agent not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.get('/:id', agentController.getAgentById);
 
 export default router;

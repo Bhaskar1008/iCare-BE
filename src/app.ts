@@ -27,8 +27,12 @@ import agentRoutes from '@/modules/agent/agent.routes';
 import leadRoutes from '@/modules/lead/lead.routes';
 import provinceRoutes from '@/modules/province/province.routes';
 import businessCommitmentRoutes from '@/modules/business-commitment/business-commitment.routes';
+import aobRoutes from '@/modules/aob/aob.routes';
 import productCategoryRoutes from '@/modules/product-category/product-category.routes';
 import productRoutes from '@/modules/product/product.routes';
+import utilityRoutes from '@/modules/utility/utility.routes';
+import projectRoutes from '@/modules/project/project.routes';
+import moduleRoutes from '@/modules/module/module.routes';
 import cookieParser from 'cookie-parser';
 
 // Session constants
@@ -122,19 +126,6 @@ export class App {
       });
     });
 
-    this.app.use('/health/database', (req: Request, res: Response) => {
-      const health = this.databaseProvider.getHealth();
-      const statusCode =
-        health.status === 'connected'
-          ? HTTP_STATUS.OK
-          : HTTP_STATUS.SERVICE_UNAVAILABLE;
-
-      res.status(statusCode).json({
-        ...health,
-        timestamp: new Date().toISOString(),
-      });
-    });
-
     this.app.use('/api/auth', authRoutes);
     this.app.use('/api/users', userRoutes);
     this.app.use('/api/channels', channelRoutes);
@@ -149,8 +140,26 @@ export class App {
     this.app.use('/api/leads', leadRoutes);
     this.app.use('/api/provinces', provinceRoutes);
     this.app.use('/api/business-commitments', businessCommitmentRoutes);
+    this.app.use('/api/aobDocumentMaster', aobRoutes);
+    this.app.use('/api/aob', aobRoutes);
     this.app.use('/api/product-categories', productCategoryRoutes);
     this.app.use('/api/products', productRoutes);
+    this.app.use('/api/utility', utilityRoutes);
+    this.app.use('/api/projects', projectRoutes);
+    this.app.use('/api/modules', moduleRoutes);
+
+    this.app.use('/health/database', (req: Request, res: Response) => {
+      const health = this.databaseProvider.getHealth();
+      const statusCode =
+        health.status === 'connected'
+          ? HTTP_STATUS.OK
+          : HTTP_STATUS.SERVICE_UNAVAILABLE;
+
+      res.status(statusCode).json({
+        ...health,
+        timestamp: new Date().toISOString(),
+      });
+    });
 
     this.app.use((req: Request, res: Response) => {
       res.status(HTTP_STATUS.NOT_FOUND).json({

@@ -16,6 +16,10 @@ export interface IAgentRepository {
     page?: number,
     limit?: number,
   ): Promise<{ agents: IAgent[]; total: number; totalPages: number }>;
+  findAgentsByDesignationAndChannel(
+    designationId: string,
+    channelId: string,
+  ): Promise<IAgent[]>;
 }
 
 export interface IAgentService {
@@ -40,6 +44,14 @@ export interface IAgentService {
   getActiveAgents(): Promise<AgentResponseDto[]>;
   getAgentsByChannelId(channelId: string): Promise<AgentResponseDto[]>;
   getAgentsByUserId(userId: string): Promise<AgentResponseDto[]>;
+  getAgentHierarchyInfo(
+    agentId: string,
+    hierarchyId?: string,
+    channelId?: string,
+  ): Promise<{
+    hierarchies?: { hierarchyName: string; hierarchyId: string }[];
+    agents?: { firstName: string; lastName: string; id: string }[];
+  }>;
 }
 
 export interface IAgentController {

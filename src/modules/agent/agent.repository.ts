@@ -3,6 +3,7 @@ import { AgentModel, type IAgent } from '@/models/agent.model';
 import type { FilterQuery } from 'mongoose';
 import logger from '@/common/utils/logger';
 import type { IAgentRepository } from '@/modules/agent/interfaces/agent.interface';
+import { Types } from 'mongoose';
 
 export class AgentRepository
   extends BaseRepository<IAgent>
@@ -184,6 +185,41 @@ export class AgentRepository
         error: err.message,
         stack: err.stack,
         userId,
+      });
+      throw error;
+    }
+  }
+
+  public async findAgentsByDesignationAndChannel(
+    designationId: string,
+    channelId: string,
+  ): Promise<IAgent[]> {
+    try {
+      logger.debug('Finding agents by designation and channel', {
+        designationId,
+        channelId,
+      });
+
+      const agents = await AgentModel.find({
+        designationId: new Types.ObjectId(designationId),
+        channelId: new Types.ObjectId(channelId),
+        isDeleted: false,
+      }).populate(['channelId', 'designationId']);
+
+      logger.debug('Found agents by designation and channel', {
+        count: agents.length,
+        designationId,
+        channelId,
+      });
+
+      return agents;
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.error('Failed to find agents by designation and channel:', {
+        error: err.message,
+        stack: err.stack,
+        designationId,
+        channelId,
       });
       throw error;
     }

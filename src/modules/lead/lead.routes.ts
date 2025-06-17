@@ -465,6 +465,16 @@ router.get('/:id/status-count', leadController.getStatusCount);
  *           type: string
  *         description: Search term when searchType is Name
  *       - in: query
+ *         name: mobileNo
+ *         schema:
+ *           type: string
+ *         description: Search term when searchType is Mobile
+ *       - in: query
+ *         name: leadId
+ *         schema:
+ *           type: string
+ *         description: Search term when searchType is Lead ID
+ *       - in: query
  *         name: leadStatus
  *         schema:
  *           type: string

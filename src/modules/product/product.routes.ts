@@ -473,9 +473,9 @@ router.get('/channel/:channelId', productController.getProductsByChannel);
  *     summary: Upload files directly to S3
  *     description: |
  *       Upload files directly to S3 bucket. The files will be immediately available after upload.
- *       
+ *
  *       ## Upload Instructions
- *       
+ *
  *       ### Using Postman
  *       1. Create new request
  *       2. Method: POST
@@ -489,7 +489,7 @@ router.get('/channel/:channelId', productController.getProductsByChannel);
  *          - Add file(s):
  *            - Key: "files"
  *            - Value: Select your file(s)
- *       
+ *
  *       ### Using curl
  *       ```bash
  *       # Single file upload
@@ -497,7 +497,7 @@ router.get('/channel/:channelId', productController.getProductsByChannel);
  *         -F "userId=507f1f77bcf86cd799439012" \
  *         -F "fileType=image" \
  *         -F "files=@/path/to/your/image.jpg"
- *       
+ *
  *       # Multiple files upload
  *       curl -X POST 'http://localhost:3000/api/products/upload' \
  *         -F "userId=507f1f77bcf86cd799439012" \
@@ -506,14 +506,14 @@ router.get('/channel/:channelId', productController.getProductsByChannel);
  *         -F "files=@/path/to/your/image1.jpg" \
  *         -F "files=@/path/to/your/image2.png"
  *       ```
- *       
+ *
  *       ## File Size Limits
  *       - Images: Max 10MB
  *       - Videos: Max 100MB
  *       - Documents: Max 50MB
- *       
+ *
  *       ## Supported File Types
- *       
+ *
  *       ### Images
  *       - JPEG (.jpg, .jpeg)
  *       - PNG (.png)
@@ -522,7 +522,7 @@ router.get('/channel/:channelId', productController.getProductsByChannel);
  *       - SVG (.svg)
  *       - TIFF (.tif, .tiff)
  *       - BMP (.bmp)
- *       
+ *
  *       ### Videos
  *       - MP4 (.mp4)
  *       - WebM (.webm)
@@ -531,7 +531,7 @@ router.get('/channel/:channelId', productController.getProductsByChannel);
  *       - Windows Media (.wmv)
  *       - Flash Video (.flv)
  *       - 3GPP (.3gp)
- *       
+ *
  *       ### Documents
  *       - PDF (.pdf)
  *       - Word (.doc, .docx)

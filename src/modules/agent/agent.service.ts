@@ -11,6 +11,8 @@ import type {
 import { Types } from 'mongoose';
 import type { IChannel } from '@/models/channel.model';
 import type { IDesignation } from '@/models/designation.model';
+import { HierarchyService } from '@/modules/hierarchy/hierarchy.service';
+import { DesignationService } from '@/modules/designation/designation.service';
 
 export class AgentService implements IAgentService {
   private agentRepository: IAgentRepository;
@@ -457,5 +459,110 @@ export class AgentService implements IAgentService {
 
     // Fallback for other types
     return { id: undefined };
+  }
+
+  public async getAgentHierarchyInfo(
+    agentId: string,
+    hierarchyId?: string,
+    channelId?: string,
+  ): Promise<{
+    hierarchies?: { hierarchyName: string; hierarchyId: string }[];
+    agents?: { firstName: string; lastName: string; id: string }[];
+  }> {
+    try {
+      logger.debug('Getting agent hierarchy info', {
+        agentId,
+        hierarchyId,
+        channelId,
+      });
+
+      // Get agent's designation
+      const agent = await this.agentRepository.findById(agentId);
+      if (!agent) {
+        throw new Error('Agent not found');
+      }
+
+      // Get hierarchy information
+      const hierarchyService = new HierarchyService();
+      const agentChannelId =
+        typeof agent.channelId === 'string'
+          ? agent.channelId
+          : agent.channelId &&
+              typeof agent.channelId === 'object' &&
+              '_id' in agent.channelId
+            ? agent.channelId._id.toString()
+            : '';
+      const hierarchies =
+        await hierarchyService.getHierarchiesByChannel(agentChannelId);
+
+      // Find hierarchy with level code 18
+      const targetHierarchy = hierarchies.find(
+        h => h.hierarchyLevelCode === '18',
+      );
+      if (!targetHierarchy) {
+        throw new Error('Target hierarchy level 18 not found');
+      }
+
+      // If only agentId is provided, return hierarchies
+      if (!hierarchyId || !channelId) {
+        // Get hierarchies with level less than 18
+        const filteredHierarchies = hierarchies
+          .filter(h => Number(h.hierarchyLevelCode) < 18)
+          .map(h => ({
+            hierarchyName: h.hierarchyName,
+            hierarchyId: h._id.toString(),
+          }));
+
+        logger.debug('Returning hierarchies list', {
+          count: filteredHierarchies.length,
+        });
+
+        return {
+          hierarchies: filteredHierarchies,
+        };
+      }
+
+      // If hierarchyId and channelId are provided, return agents
+      const designationService = new DesignationService();
+      const designations =
+        await designationService.getDesignationsByHierarchyId(hierarchyId);
+
+      const agentPromises = designations.map(async designation => {
+        const agents =
+          await this.agentRepository.findAgentsByDesignationAndChannel(
+            designation._id.toString(),
+            channelId,
+          );
+        return agents;
+      });
+
+      const agentResults = await Promise.all(agentPromises);
+      const agents = agentResults
+        .flat()
+        .filter((agent: IAgent) => agent.firstName && agent.lastName)
+        .map((agent: IAgent) => ({
+          firstName: agent.firstName!,
+          lastName: agent.lastName!,
+          id: agent._id.toString(),
+        }));
+
+      logger.debug('Returning agents list', {
+        count: agents.length,
+      });
+
+      return {
+        agents,
+      };
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.error('Failed to get agent hierarchy info:', {
+        error: err.message,
+        stack: err.stack,
+        agentId,
+        hierarchyId,
+        channelId,
+      });
+      throw error;
+    }
   }
 }

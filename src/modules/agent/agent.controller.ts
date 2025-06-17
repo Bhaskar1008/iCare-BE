@@ -14,6 +14,7 @@ import type {
   IAgentService,
 } from '@/modules/agent/interfaces/agent.interface';
 import type { ValidatedRequest } from '@/common/interfaces/validation.interface';
+import type { GetAgentHierarchyDto } from './dto/get-agent-hierarchy.dto';
 
 export class AgentController
   extends BaseController
@@ -302,4 +303,39 @@ export class AgentController
       );
     }
   };
+
+  async getAgentHierarchyInfo(
+    req: ValidatedRequest<GetAgentHierarchyDto>,
+    res: Response,
+  ) {
+    try {
+      const { agentId, hierarchyId, channelId } = req.validatedQuery;
+
+      logger.debug('Getting agent hierarchy info request', {
+        agentId,
+        hierarchyId,
+        channelId,
+      });
+
+      const result = await this.agentService.getAgentHierarchyInfo(
+        agentId,
+        hierarchyId,
+        channelId,
+      );
+
+      const message = result.hierarchies
+        ? 'Successfully retrieved agent hierarchies'
+        : 'Successfully retrieved agents list';
+
+      this.sendSuccess(res, result, message);
+    } catch (error) {
+      const err = error as Error;
+      this.sendError(
+        res,
+        'Failed to get agent hierarchy information',
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        err,
+      );
+    }
+  }
 }

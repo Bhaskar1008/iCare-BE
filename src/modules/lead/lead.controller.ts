@@ -20,6 +20,8 @@ interface AdvancedFilterCriteria {
     | 'Lead Created date - oldest to Newest';
   searchType?: 'Name' | 'Mobile' | 'Lead ID';
   name?: string;
+  mobileNo?: string;
+  leadId?: string;
   leadStatus?: string;
   leadType?: string;
   leadProgress?: string;
@@ -302,6 +304,8 @@ class LeadController extends BaseController {
         createdBy,
         searchType,
         name,
+        mobileNo,
+        leadId,
         leadStatus,
         leadType,
         leadProgress,
@@ -314,6 +318,8 @@ class LeadController extends BaseController {
         createdBy: string;
         searchType: string;
         name: string;
+        mobileNo: string;
+        leadId: string;
         leadStatus: string;
         leadType: string;
         leadProgress: string;
@@ -335,6 +341,8 @@ class LeadController extends BaseController {
         filterCriteria.searchType =
           (searchType as 'Name' | 'Mobile' | 'Lead ID') || 'Name';
       if (name) filterCriteria.name = name;
+      if (mobileNo) filterCriteria.mobileNo = mobileNo;
+      if (leadId) filterCriteria.leadId = leadId;
       if (leadStatus) filterCriteria.leadStatus = leadStatus;
       if (leadType) filterCriteria.leadType = leadType;
       if (leadProgress) filterCriteria.leadProgress = leadProgress;

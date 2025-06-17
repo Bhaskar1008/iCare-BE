@@ -1,6 +1,8 @@
+import type { Types } from 'mongoose';
 import { Schema, model } from 'mongoose';
 import { VALIDATION } from '@/common/constants/http-status.constants';
 import type { IBaseModel } from './base.model';
+import type { IProject } from './project.model';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
@@ -15,7 +17,9 @@ export interface IUser extends IBaseModel {
   firstName: string;
   lastName: string;
   isActive: boolean;
-  role: string;
+  role: 'user' | 'admin' | 'superadmin';
+  projectId?: Types.ObjectId | IProject;
+  allProjects?: IProject[];
   agentCode?: string;
   otp?: string;
   refreshToken?: string;
@@ -71,6 +75,16 @@ const userSchema = new Schema<IUser>(
       enum: ['user', 'admin', 'superadmin'],
       default: 'user',
     },
+    projectId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Project',
+      required: [
+        function (this: IUser) {
+          return this.role === 'user';
+        },
+        'Project ID is required for user role',
+      ],
+    },
     refreshToken: {
       type: String,
       select: false,
@@ -118,6 +132,16 @@ userSchema.pre('save', async function (next) {
   }
 });
 
+// Validate projectId based on role
+userSchema.pre('save', function (next) {
+  if (this.role === 'user' && !this.projectId) {
+    next(new Error('Project ID is required for user role'));
+  } else if (this.role !== 'user') {
+    this.projectId = undefined; // Clear projectId for non-user roles
+  }
+  next();
+});
+
 userSchema.methods.comparePassword = async function (
   candidatePassword: string,
 ): Promise<boolean> {
@@ -138,6 +162,7 @@ userSchema.methods.createPasswordResetToken = function (): string {
 };
 
 userSchema.index({ isActive: 1 });
+userSchema.index({ projectId: 1 });
 userSchema.index({ createdAt: -1 });
 
 userSchema.virtual('fullName').get(function () {

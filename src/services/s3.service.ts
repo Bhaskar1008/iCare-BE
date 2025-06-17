@@ -27,7 +27,7 @@ export class S3Service {
         Bucket: awsConfig.s3.bucket,
         Key: `Salesverse/${key}`,
         Body: file,
-        ContentType: contentType || this.getDefaultContentType(key),
+        ContentType: contentType ?? this.getDefaultContentType(key),
         CacheControl: 'public, max-age=31536000', // Cache for 1 year
       });
 
@@ -88,7 +88,7 @@ export class S3Service {
         return 'image/tiff';
       case 'bmp':
         return 'image/bmp';
-      
+
       // Videos
       case 'mp4':
         return 'video/mp4';
@@ -104,7 +104,7 @@ export class S3Service {
         return 'video/x-flv';
       case '3gp':
         return 'video/3gpp';
-      
+
       // Documents
       case 'pdf':
         return 'application/pdf';
@@ -126,7 +126,7 @@ export class S3Service {
         return 'text/csv';
       case 'rtf':
         return 'application/rtf';
-      
+
       default:
         return 'application/octet-stream';
     }

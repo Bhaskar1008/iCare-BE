@@ -6,7 +6,7 @@ const DEFAULT_PORT = 3000;
 
 const config = {
   port: process.env.PORT ? parseInt(process.env.PORT, 10) : DEFAULT_PORT,
-  environment: process.env.NODE_ENV ?? 'development',
+  environment: process.env.NODE_ENV ?? 'test',
   database: getDatabaseConfig(),
   corsOrigin: process.env.CORS_ORIGIN ?? '*',
 };

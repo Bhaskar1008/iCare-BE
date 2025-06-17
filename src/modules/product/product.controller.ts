@@ -363,10 +363,7 @@ export class ProductController
     }
   };
 
-  public uploadToS3 = async (
-    req: Request,
-    res: Response,
-  ): Promise<void> => {
+  public uploadToS3 = async (req: Request, res: Response): Promise<void> => {
     try {
       logger.debug('File upload request received', {
         body: req.body,
@@ -379,7 +376,10 @@ export class ProductController
       }
 
       const uploadData = req.body as S3UploadRequestDto;
-      const result = await this.productService.uploadToS3(uploadData, req.files);
+      const result = await this.productService.uploadToS3(
+        uploadData,
+        req.files,
+      );
 
       logger.info('Files uploaded successfully', {
         userId: uploadData.userId,

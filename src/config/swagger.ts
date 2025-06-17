@@ -23,7 +23,7 @@ const options: swaggerJsdoc.Options = {
         description: 'Development server',
       },
       {
-        url: 'https://api.salesverse.com',
+        url: 'https://salesverse-dev-api.inxtuniverse.com',
         description: 'Production server',
       },
     ],
@@ -108,6 +108,14 @@ const options: swaggerJsdoc.Options = {
       {
         name: 'Business Commitments',
         description: 'Business commitment management endpoints',
+      },
+      {
+        name: 'Projects',
+        description: 'Project management endpoints',
+      },
+      {
+        name: 'Modules',
+        description: 'Module management endpoints',
       },
     ],
     externalDocs: {

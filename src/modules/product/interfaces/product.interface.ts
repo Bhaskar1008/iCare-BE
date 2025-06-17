@@ -7,12 +7,12 @@ import type {
   S3UploadResponseDto,
 } from '../dto/s3-upload.dto';
 import type { IProduct } from '@/models/product.model';
-import type { FilterQuery, QueryWithHelpers } from 'mongoose';
+import type { FilterQuery, Query } from 'mongoose';
 
 export interface IProductRepository {
   create(data: Partial<IProduct>): Promise<IProduct>;
   findById(id: string): Promise<IProduct | null>;
-  find(query: FilterQuery<IProduct>): QueryWithHelpers<IProduct[], IProduct>;
+  find(query: FilterQuery<IProduct>): Query<IProduct[], IProduct>;
   countDocuments(query: FilterQuery<IProduct>): Promise<number>;
   findOne(query: FilterQuery<IProduct>): Promise<IProduct | null>;
   findByName(productName: string): Promise<IProduct | null>;
@@ -25,7 +25,8 @@ export interface IProductRepository {
     limit?: number,
   ): Promise<{ products: IProduct[]; total: number; totalPages: number }>;
   updateById(id: string, data: Partial<IProduct>): Promise<IProduct | null>;
-  deleteById(id: string): Promise<boolean>;
+  deleteById(id: string): Promise<IProduct | null>;
+  softDelete(id: string): Promise<boolean>;
 }
 
 export interface IProductService {
@@ -49,9 +50,15 @@ export interface IProductService {
   getActiveProducts(): Promise<ProductResponseDto[]>;
   getProductsByCategory(categoryId: string): Promise<ProductResponseDto[]>;
   getProductsByChannel(channelId: string): Promise<ProductResponseDto[]>;
-  updateProduct(id: string, data: UpdateProductDto): Promise<ProductResponseDto | null>;
+  updateProduct(
+    id: string,
+    data: UpdateProductDto,
+  ): Promise<ProductResponseDto | null>;
   deleteProduct(id: string): Promise<boolean>;
-  uploadToS3(data: S3UploadRequestDto, files: Express.Multer.File[]): Promise<S3UploadResponseDto>;
+  uploadToS3(
+    data: S3UploadRequestDto,
+    files: Express.Multer.File[],
+  ): Promise<S3UploadResponseDto>;
 }
 
 export interface IProductController {

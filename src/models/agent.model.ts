@@ -336,19 +336,16 @@ const agentSchema = new Schema<IAgent>(
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: [true, 'User ID is required'],
-      index: true,
     },
     channelId: {
       type: Schema.Types.ObjectId,
       ref: 'Channel',
       required: [true, 'Channel ID is required'],
-      index: true,
     },
     designationId: {
       type: Schema.Types.ObjectId,
       ref: 'Designation',
       required: [true, 'Designation ID is required'],
-      index: true,
     },
     agentCode: {
       type: String,
@@ -373,7 +370,6 @@ const agentSchema = new Schema<IAgent>(
         `Employee ID cannot exceed ${VALIDATION.MAX_CODE_LENGTH} characters`,
       ],
       sparse: true,
-      index: true,
     },
     title: {
       type: String,
@@ -450,13 +446,11 @@ const agentSchema = new Schema<IAgent>(
       type: String,
       trim: true,
       sparse: true,
-      index: true,
     },
     taxId: {
       type: String,
       trim: true,
       sparse: true,
-      index: true,
     },
     phoneNumber: {
       type: String,
@@ -494,7 +488,6 @@ const agentSchema = new Schema<IAgent>(
         message: 'Status must be one of: active, inactive, suspended',
       },
       default: 'active',
-      index: true,
     },
     agentType: {
       type: String,
@@ -503,11 +496,9 @@ const agentSchema = new Schema<IAgent>(
         message:
           'Agent type must be one of: full_time, part_time, contract, freelance, intern',
       },
-      index: true,
     },
     joiningDate: {
       type: Date,
-      index: true,
     },
     resignationDate: {
       type: Date,
@@ -641,17 +632,14 @@ const agentSchema = new Schema<IAgent>(
     isTeamLead: {
       type: Boolean,
       default: false,
-      index: true,
     },
     teamLeadId: {
       type: Schema.Types.ObjectId,
       ref: 'Agent',
-      index: true,
     },
     reportingManagerId: {
       type: Schema.Types.ObjectId,
       ref: 'Agent',
-      index: true,
     },
     bio: {
       type: String,
@@ -1189,13 +1177,11 @@ const agentSchema = new Schema<IAgent>(
           type: String,
           required: [true, 'Certification ID is required'],
           trim: true,
-          index: true,
         },
         certificationType: {
           type: String,
           required: [true, 'Certification type is required'],
           trim: true,
-          index: true,
         },
         status: {
           type: String,
@@ -1206,22 +1192,18 @@ const agentSchema = new Schema<IAgent>(
               'Status must be one of: pending, in_progress, under_review, submitted, approved, rejected, expired',
           },
           default: 'pending',
-          index: true,
         },
         certificateNumber: {
           type: String,
           trim: true,
           uppercase: true,
           sparse: true,
-          index: true,
         },
         issuedDate: {
           type: Date,
-          index: true,
         },
         expiryDate: {
           type: Date,
-          index: true,
         },
         issuingAuthority: {
           type: String,
@@ -1231,12 +1213,10 @@ const agentSchema = new Schema<IAgent>(
           type: String,
           required: [true, 'Country is required'],
           trim: true,
-          index: true,
         },
         region: {
           type: String,
           trim: true,
-          index: true,
         },
         notes: {
           type: String,
@@ -1251,13 +1231,11 @@ const agentSchema = new Schema<IAgent>(
           type: String,
           required: [true, 'Document ID is required'],
           trim: true,
-          index: true,
         },
         documentType: {
           type: String,
           required: [true, 'Document type is required'],
           trim: true,
-          index: true,
         },
         documentCategory: {
           type: String,
@@ -1267,12 +1245,10 @@ const agentSchema = new Schema<IAgent>(
             message:
               'Category must be one of: certification, identity, financial, training, compliance, education, medical, visa, license, other',
           },
-          index: true,
         },
         certificationId: {
           type: String,
           trim: true,
-          index: true,
         },
         fileName: {
           type: String,
@@ -1310,7 +1286,6 @@ const agentSchema = new Schema<IAgent>(
           type: Date,
           required: [true, 'Upload date is required'],
           default: Date.now,
-          index: true,
         },
         status: {
           type: String,
@@ -1321,7 +1296,6 @@ const agentSchema = new Schema<IAgent>(
               'Status must be one of: pending, in_progress, under_review, submitted, approved, rejected, expired',
           },
           default: 'pending',
-          index: true,
         },
         reviewedBy: {
           type: String,
@@ -1340,24 +1314,20 @@ const agentSchema = new Schema<IAgent>(
         },
         expiryDate: {
           type: Date,
-          index: true,
         },
         isRequired: {
           type: Boolean,
           required: [true, 'Required flag is mandatory'],
           default: false,
-          index: true,
         },
         country: {
           type: String,
           required: [true, 'Country is required'],
           trim: true,
-          index: true,
         },
         region: {
           type: String,
           trim: true,
-          index: true,
         },
         metadata: {
           amount: {

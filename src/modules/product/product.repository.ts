@@ -1,6 +1,6 @@
 import { BaseRepository } from '@/repository/base.repository';
 import { ProductModel, type IProduct } from '@/models/product.model';
-import type { FilterQuery } from 'mongoose';
+import type { FilterQuery, Query } from 'mongoose';
 import { Types } from 'mongoose';
 import logger from '@/common/utils/logger';
 import type { IProductRepository } from '@/modules/product/interfaces/product.interface';
@@ -11,6 +11,28 @@ export class ProductRepository
 {
   constructor() {
     super(ProductModel);
+  }
+
+  public find(query: FilterQuery<IProduct>): Query<IProduct[], IProduct> {
+    logger.debug('Finding documents', { query });
+    return this.model.find(query);
+  }
+
+  public async countDocuments(query: FilterQuery<IProduct>): Promise<number> {
+    try {
+      logger.debug('Counting documents', { query });
+      const count = await this.model.countDocuments(query).exec();
+      logger.debug('Documents counted', { count });
+      return count;
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.error('Failed to count documents:', {
+        error: err.message,
+        stack: err.stack,
+        query,
+      });
+      throw error;
+    }
   }
 
   public async findByName(productName: string): Promise<IProduct | null> {
@@ -188,6 +210,48 @@ export class ProductRepository
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       logger.error('Failed to find product by ID:', {
+        error: err.message,
+        stack: err.stack,
+        id,
+      });
+      throw error;
+    }
+  }
+
+  public async softDelete(id: string): Promise<boolean> {
+    try {
+      logger.debug('Soft deleting document by ID', { id });
+      const result = await this.model.findByIdAndUpdate(
+        id,
+        { isDeleted: true, deletedAt: new Date() },
+        { new: true },
+      );
+      logger.debug('Document soft deleted', { id, success: !!result });
+      return !!result;
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.error('Failed to soft delete document:', {
+        error: err.message,
+        stack: err.stack,
+        id,
+      });
+      throw error;
+    }
+  }
+
+  public override async deleteById(id: string): Promise<IProduct | null> {
+    try {
+      logger.debug('Deleting document by ID', { id });
+      const result = await this.model.findByIdAndUpdate(
+        id,
+        { isDeleted: true, deletedAt: new Date() },
+        { new: true },
+      );
+      logger.debug('Document deleted', { id, success: !!result });
+      return result;
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.error('Failed to delete document:', {
         error: err.message,
         stack: err.stack,
         id,

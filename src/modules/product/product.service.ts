@@ -23,9 +23,11 @@ import { PAGINATION } from '@/common/constants/pagination.constant';
 
 export class ProductService implements IProductService {
   private productRepository: IProductRepository;
+  private s3Service: S3Service;
 
   constructor() {
     this.productRepository = new ProductRepository();
+    this.s3Service = new S3Service();
   }
 
   public async createProduct(
@@ -127,14 +129,14 @@ export class ProductService implements IProductService {
             title: video.title,
             s3Links: video.s3Links ?? [],
             youtubeUrl: video.youtubeUrl,
-            isActive: video.isActive,
+            isActive: video.isActive ?? true,
             uploadedAt: new Date(),
           })) ?? [],
         images:
           data.media?.images?.map(image => ({
             title: image.title,
             s3Link: image.s3Link,
-            isActive: image.isActive,
+            isActive: image.isActive ?? true,
             uploadedAt: new Date(),
           })) ?? [],
       },
@@ -172,9 +174,9 @@ export class ProductService implements IProductService {
   }
 
   public async getAllProducts(
-    page = PAGINATION.DEFAULT_PAGE,
-    limit = PAGINATION.DEFAULT_LIMIT,
-    status?: 'active' | 'inactive',
+    page: number = PAGINATION.DEFAULT_PAGE,
+    limit: number = PAGINATION.DEFAULT_LIMIT,
+    status?: string,
     categoryId?: string,
     channelId?: string,
   ): Promise<{
@@ -195,43 +197,22 @@ export class ProductService implements IProductService {
         channelId,
       });
 
-      const query: FilterQuery<IProduct> = { isDeleted: false };
-
-      if (status) {
-        query.status = status;
-      }
-      if (categoryId) {
-        query.productCategoryId = new Types.ObjectId(categoryId);
-      }
-      if (channelId) {
-        query.channelIds = new Types.ObjectId(channelId);
-      }
-
-      const [products, total] = await Promise.all([
-        this.productRepository
-          .find(query)
-          .skip((page - 1) * limit)
-          .limit(limit)
-          .exec(),
-        this.productRepository.countDocuments(query),
-      ]);
-
-      const mappedProducts = products.map((product: IProduct) =>
-        this.mapToResponseDto(product),
+      const filter = this.buildProductFilter(status, categoryId, channelId);
+      const result = await this.productRepository.findWithPagination(
+        filter,
+        page,
+        limit,
       );
 
-      logger.debug('Products retrieved successfully', {
-        count: products.length,
-        total,
-      });
-
       return {
-        products: mappedProducts,
+        products: result.products.map(product =>
+          this.mapToResponseDto(product),
+        ),
         pagination: {
-          total,
+          total: result.total,
           page,
           limit,
-          pages: Math.ceil(total / limit),
+          pages: result.totalPages,
         },
       };
     } catch (error) {
@@ -247,6 +228,26 @@ export class ProductService implements IProductService {
       });
       throw error;
     }
+  }
+
+  private buildProductFilter(
+    status?: string,
+    categoryId?: string,
+    channelId?: string,
+  ): FilterQuery<IProduct> {
+    const filter: FilterQuery<IProduct> = { isDeleted: false };
+
+    if (status) {
+      filter.status = status;
+    }
+    if (categoryId) {
+      filter.productCategoryId = new Types.ObjectId(categoryId);
+    }
+    if (channelId) {
+      filter.channelIds = new Types.ObjectId(channelId);
+    }
+
+    return filter;
   }
 
   public async getActiveProducts(): Promise<ProductResponseDto[]> {
@@ -483,16 +484,13 @@ export class ProductService implements IProductService {
       }
 
       // Soft delete
-      const updatedProduct = await this.productRepository.updateById(id, {
-        isDeleted: true,
-        deletedAt: new Date(),
-      });
+      const deleted = await this.productRepository.deleteById(id);
 
       logger.info('Product deleted successfully', {
         id,
-        deleted: !!updatedProduct,
+        deleted: !!deleted,
       });
-      return !!updatedProduct;
+      return !!deleted;
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       logger.error('Failed to delete product:', {
@@ -509,30 +507,42 @@ export class ProductService implements IProductService {
     files: Express.Multer.File[],
   ): Promise<S3UploadResponseDto> {
     try {
-      logger.debug('Uploading files to S3', { data });
+      logger.debug('Uploading files to S3', {
+        userId: data.userId,
+        fileType: data.fileType,
+        isMultiple: data.isMultiple,
+        fileCount: files.length,
+      });
 
       // Validate user exists
       const user = await UserModel.findById(data.userId);
-
       if (!user || user.isDeleted) {
         throw new DatabaseValidationException('User not found or deleted');
       }
 
-      const s3Service = new S3Service();
+      // Validate file types based on fileType parameter
+      this.validateFileTypes(files, data.fileType);
+
       const timestamp = Date.now();
 
       // Handle multiple files
       if (data.isMultiple && files.length > 1) {
-        const uploadPromises = files.map((file, index) => {
-          const fileExtension = path.extname(file.originalname);
-          const key = `${data.userId}/${data.fileType}/${timestamp}_${index}${fileExtension}`;
-          return s3Service.uploadFile(key, file.buffer, file.mimetype);
+        const uploadResults = await Promise.all(
+          files.map((file, index) => {
+            const fileExtension = path.extname(file.originalname);
+            const key = `${data.userId}/${data.fileType}/${timestamp}_${index}${fileExtension}`;
+            return this.s3Service.uploadFile(key, file.buffer, file.mimetype);
+          }),
+        );
+
+        logger.info('Multiple files uploaded successfully to S3', {
+          userId: data.userId,
+          fileType: data.fileType,
+          count: files.length,
         });
 
-        const results = await Promise.all(uploadPromises);
-
         return {
-          files: results,
+          files: uploadResults,
         };
       }
 
@@ -541,7 +551,17 @@ export class ProductService implements IProductService {
       const fileExtension = path.extname(file.originalname);
       const key = `${data.userId}/${data.fileType}/${timestamp}${fileExtension}`;
 
-      const result = await s3Service.uploadFile(key, file.buffer, file.mimetype);
+      const result = await this.s3Service.uploadFile(
+        key,
+        file.buffer,
+        file.mimetype,
+      );
+
+      logger.info('File uploaded successfully to S3', {
+        userId: data.userId,
+        fileType: data.fileType,
+        fileKey: result.fileKey,
+      });
 
       return {
         fileKey: result.fileKey,
@@ -552,9 +572,79 @@ export class ProductService implements IProductService {
       logger.error('Failed to upload files to S3:', {
         error: err.message,
         stack: err.stack,
-        data,
+        userId: data.userId,
+        fileType: data.fileType,
       });
       throw error;
+    }
+  }
+
+  private validateFileTypes(
+    files: Express.Multer.File[],
+    fileType: string,
+  ): void {
+    const allowedMimeTypes: Record<string, string[]> = {
+      image: [
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+        'image/svg+xml',
+        'image/tiff',
+        'image/bmp',
+      ],
+      video: [
+        'video/mp4',
+        'video/webm',
+        'video/x-msvideo',
+        'video/quicktime',
+        'video/x-ms-wmv',
+        'video/x-flv',
+        'video/3gpp',
+      ],
+      document: [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-powerpoint',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'text/plain',
+        'text/csv',
+        'application/rtf',
+      ],
+    };
+
+    // Check if fileType is valid
+    if (!allowedMimeTypes[fileType]) {
+      throw new DatabaseValidationException(
+        `Invalid file type: ${fileType}. Must be one of: image, video, document`,
+      );
+    }
+
+    // Check if all files match the expected type
+    for (const file of files) {
+      if (!allowedMimeTypes[fileType].includes(file.mimetype)) {
+        throw new DatabaseValidationException(
+          `File type mismatch. Expected ${fileType} but got ${file.mimetype}. Allowed types for ${fileType} are: ${allowedMimeTypes[fileType].join(', ')}`,
+        );
+      }
+    }
+
+    // Check file size limits
+    const maxSizes: Record<string, number> = {
+      image: 10 * 1024 * 1024, // 10MB
+      video: 100 * 1024 * 1024, // 100MB
+      document: 50 * 1024 * 1024, // 50MB
+    };
+
+    for (const file of files) {
+      if (file.size > maxSizes[fileType]) {
+        throw new DatabaseValidationException(
+          `File size exceeds the maximum allowed size for ${fileType}. Maximum size is ${maxSizes[fileType] / (1024 * 1024)}MB`,
+        );
+      }
     }
   }
 
@@ -572,7 +662,7 @@ export class ProductService implements IProductService {
       '_id' in categoryInfo
     ) {
       const category = categoryInfo as { _id: string; categoryName?: string };
-      categoryId = category._id;
+      categoryId = category._id.toString();
       categoryName = category.categoryName;
     } else {
       categoryId =
@@ -593,12 +683,14 @@ export class ProductService implements IProductService {
         _id: string;
         channelName?: string;
       }>;
-      channelIds = channels.map(c => c._id);
+      channelIds = channels.map(c => c._id.toString());
       channelNames = channels
         .map(c => c.channelName)
         .filter(Boolean) as string[];
     } else {
-      channelIds = product.channelIds.map(id => id.toString());
+      channelIds = product.channelIds.map(id =>
+        id instanceof Types.ObjectId ? id.toString() : String(id),
+      );
     }
 
     let createdById: string;
@@ -613,7 +705,7 @@ export class ProductService implements IProductService {
         firstName?: string;
         lastName?: string;
       };
-      createdById = userInfo._id;
+      createdById = userInfo._id.toString();
       createdByName =
         userInfo.firstName && userInfo.lastName
           ? `${userInfo.firstName} ${userInfo.lastName}`
@@ -655,7 +747,7 @@ export class ProductService implements IProductService {
     });
 
     return {
-      _id: product._id,
+      _id: product._id.toString(),
       productCategoryId: categoryId,
       productCategoryName: categoryName,
       channelIds,

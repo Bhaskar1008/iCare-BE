@@ -91,6 +91,9 @@ const authController = new AuthController();
  *         accessToken:
  *           type: string
  *           description: JWT access token
+ *         refreshToken:
+ *           type: string
+ *           description: JWT refresh token
  */
 
 /**
@@ -118,6 +121,10 @@ const authController = new AuthController();
  *                   properties:
  *                     data:
  *                       $ref: '#/components/schemas/UserResponse'
+ *       400:
+ *         description: Bad request - Invalid input data
+ *       409:
+ *         description: Conflict - User already exists
  */
 router.post('/register', async (req, res) => {
   await authController.register(req, res);
@@ -148,6 +155,8 @@ router.post('/register', async (req, res) => {
  *                   properties:
  *                     data:
  *                       $ref: '#/components/schemas/AuthResponse'
+ *       401:
+ *         description: Unauthorized - Invalid credentials
  */
 router.post('/login', authenticateLocal, async (req, res) => {
   await authController.login(req, res);
@@ -160,6 +169,8 @@ router.post('/login', authenticateLocal, async (req, res) => {
  *     tags: [Authentication]
  *     summary: Refresh access token
  *     description: Refreshes JWT access token using refresh token
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: Token refreshed successfully
@@ -172,6 +183,8 @@ router.post('/login', authenticateLocal, async (req, res) => {
  *                   properties:
  *                     data:
  *                       $ref: '#/components/schemas/AuthResponse'
+ *       401:
+ *         description: Unauthorized - Invalid refresh token
  */
 router.post('/refresh', async (req, res) => {
   await authController.refreshToken(req, res);
@@ -193,6 +206,8 @@ router.post('/refresh', async (req, res) => {
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ApiResponse'
+ *       401:
+ *         description: Unauthorized - Invalid token
  */
 router.post('/logout', authenticateJwt, async (req, res) => {
   await authController.logout(req, res);
@@ -232,6 +247,10 @@ router.post('/logout', authenticateJwt, async (req, res) => {
  *                           type: string
  *                         message:
  *                           type: string
+ *       400:
+ *         description: Bad request - Missing required fields
+ *       401:
+ *         description: Unauthorized - Invalid agent code
  */
 router.post('/agent/login', async (req, res) => {
   await authController.agentLogin(req, res);
@@ -262,6 +281,10 @@ router.post('/agent/login', async (req, res) => {
  *                   properties:
  *                     data:
  *                       $ref: '#/components/schemas/AuthResponse'
+ *       400:
+ *         description: Bad request - Missing required fields
+ *       401:
+ *         description: Unauthorized - Invalid OTP
  */
 router.post('/agent/verify-otp', async (req, res) => {
   await authController.verifyAgentOTP(req, res);

@@ -1,11 +1,14 @@
+import type { Types } from 'mongoose';
 import { Schema, model } from 'mongoose';
 import { VALIDATION } from '@/common/constants/http-status.constants';
 import type { IBaseModel } from './base.model';
+import type { IProject } from './project.model';
 
 export interface IChannel extends IBaseModel {
   channelName: string;
   channelCode: string;
   channelStatus: 'active' | 'inactive';
+  projectId: Types.ObjectId | IProject;
 }
 
 const channelSchema = new Schema<IChannel>(
@@ -34,6 +37,11 @@ const channelSchema = new Schema<IChannel>(
         'Channel code can only contain uppercase letters, numbers, and underscores',
       ],
     },
+    projectId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Project',
+      required: [true, 'Project ID is required'],
+    },
     channelStatus: {
       type: String,
       required: [true, 'Channel status is required'],
@@ -59,6 +67,8 @@ const channelSchema = new Schema<IChannel>(
 );
 
 channelSchema.index({ channelName: 1 });
+channelSchema.index({ channelCode: 1 }, { unique: true });
+channelSchema.index({ projectId: 1 });
 channelSchema.index({ channelStatus: 1 });
 channelSchema.index({ isDeleted: 1 });
 channelSchema.index({ createdAt: -1 });
