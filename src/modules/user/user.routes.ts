@@ -18,6 +18,7 @@ const userController = new UserController();
  *         - email
  *         - firstName
  *         - lastName
+ *         - password
  *       properties:
  *         email:
  *           type: string
@@ -34,6 +35,21 @@ const userController = new UserController();
  *           maxLength: 50
  *           description: User's last name
  *           example: "Doe"
+ *         password:
+ *           type: string
+ *           minLength: 8
+ *           description: User's password (minimum 8 characters)
+ *           example: "SecurePass123"
+ *         role:
+ *           type: string
+ *           enum: [user, admin, superadmin]
+ *           description: User's role (required projectId if role is 'user')
+ *           default: user
+ *           example: "user"
+ *         projectId:
+ *           type: string
+ *           description: Project ID (required if role is 'user')
+ *           example: "685130552a4c68a9bf18218c"
  *         isActive:
  *           type: boolean
  *           description: Whether the user is active
@@ -87,6 +103,14 @@ const userController = new UserController();
  *           type: string
  *           description: User's full name
  *           example: "John Doe"
+ *         role:
+ *           type: string
+ *           description: User's role
+ *           example: "user"
+ *         projectId:
+ *           type: string
+ *           description: Project ID (if role is 'user')
+ *           example: "685130552a4c68a9bf18218c"
  *         isActive:
  *           type: boolean
  *           description: Whether the user is active
@@ -207,6 +231,8 @@ const userController = new UserController();
  *                 lastLoginAt: null
  *                 createdAt: "2024-01-15T10:30:00.000Z"
  *                 updatedAt: "2024-01-15T10:30:00.000Z"
+ *                 role: "user"
+ *                 projectId: "685130552a4c68a9bf18218c"
  *               timestamp: "2024-01-15T10:30:00.000Z"
  *       400:
  *         description: Bad request - validation errors
@@ -300,6 +326,8 @@ router.post(
  *                     lastLoginAt: "2024-01-15T10:30:00.000Z"
  *                     createdAt: "2024-01-15T10:30:00.000Z"
  *                     updatedAt: "2024-01-15T10:30:00.000Z"
+ *                     role: "user"
+ *                     projectId: "685130552a4c68a9bf18218c"
  *                 total: 1
  *                 page: 1
  *                 totalPages: 1
@@ -357,6 +385,8 @@ router.get(
  *                 lastLoginAt: "2024-01-15T10:30:00.000Z"
  *                 createdAt: "2024-01-15T10:30:00.000Z"
  *                 updatedAt: "2024-01-15T10:30:00.000Z"
+ *                 role: "user"
+ *                 projectId: "685130552a4c68a9bf18218c"
  *               timestamp: "2024-01-15T10:30:00.000Z"
  *       400:
  *         description: Bad request - invalid user ID
@@ -475,6 +505,8 @@ router.get('/email/:email', userController.getUserByEmail);
  *                 lastLoginAt: "2024-01-15T10:30:00.000Z"
  *                 createdAt: "2024-01-15T10:30:00.000Z"
  *                 updatedAt: "2024-01-15T10:30:00.000Z"
+ *                 role: "user"
+ *                 projectId: "685130552a4c68a9bf18218c"
  *               timestamp: "2024-01-15T10:30:00.000Z"
  *       400:
  *         description: Bad request - validation errors

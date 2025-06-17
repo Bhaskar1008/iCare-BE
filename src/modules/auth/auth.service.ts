@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import type { Secret } from 'jsonwebtoken';
 import { UserModel, type IUser } from '@/models/user.model';
+import { ProjectModel, type IProject } from '@/models/project.model';
 import type {
   IAuthService,
   IAuthResponse,
@@ -51,11 +52,19 @@ export class AuthService implements IAuthService {
       await user.save();
 
       const userObject = user.toObject();
+      // delete userObject.password;
+      delete userObject.refreshToken;
+      delete userObject.passwordResetToken;
+      delete userObject.passwordResetExpires;
+
+      // Fetch project information based on user role
+      const projects = await this.fetchProjectsForUser(user);
 
       return new AuthResponseDto(
         userObject,
         tokens.accessToken,
         tokens.refreshToken,
+        projects,
       );
     } catch (error) {
       logger.error('Login error:', error);
@@ -66,7 +75,11 @@ export class AuthService implements IAuthService {
   public async generateTokensForUser(
     user: IUser,
     channelId?: string,
-  ): Promise<{ accessToken: string; refreshToken: string }> {
+  ): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    projects?: IProject[];
+  }> {
     try {
       const tokens = this.generateTokens(user, channelId);
 
@@ -75,7 +88,10 @@ export class AuthService implements IAuthService {
         refreshToken: tokens.refreshToken,
       });
 
-      return tokens;
+      // Fetch project information based on user role
+      const projects = await this.fetchProjectsForUser(user);
+
+      return { ...tokens, projects };
     } catch (error) {
       logger.error('Error generating tokens for user:', error);
       throw new AuthException('Failed to generate authentication tokens');
@@ -87,6 +103,16 @@ export class AuthService implements IAuthService {
       const existingUser = await UserModel.findOne({ email: userData.email });
       if (existingUser) {
         throw new AuthException('User with this email already exists');
+      }
+
+      // Set default role if not provided
+      userData.role = userData.role ?? 'user';
+
+      // Validate projectId for users with role 'user'
+      if (userData.role === 'user' && !userData.projectId) {
+        throw new AuthException(
+          'Project ID is required for users with role "user"',
+        );
       }
 
       const newUser = await UserModel.create(userData);
@@ -119,7 +145,15 @@ export class AuthService implements IAuthService {
       user.refreshToken = tokens.refreshToken;
       await user.save();
 
-      return new AuthResponseDto(user, tokens.accessToken, tokens.refreshToken);
+      // Fetch project information based on user role
+      const projects = await this.fetchProjectsForUser(user);
+
+      return new AuthResponseDto(
+        user,
+        tokens.accessToken,
+        tokens.refreshToken,
+        projects,
+      );
     } catch (error) {
       logger.error('Refresh token error:', error);
       throw error;
@@ -177,5 +211,42 @@ export class AuthService implements IAuthService {
     });
 
     return { accessToken, refreshToken };
+  }
+
+  private async fetchProjectsForUser(user: IUser): Promise<IProject[]> {
+    try {
+      if (user.role === 'user') {
+        // For users with role "user", fetch only their assigned project
+        if (!user.projectId) {
+          return [];
+        }
+
+        const project = await ProjectModel.findById(user.projectId)
+          .populate(
+            'modules.moduleId',
+            'name code description version isCore permissions',
+          )
+          .lean();
+
+        return project ? [project] : [];
+      } else {
+        // For admin and superadmin, fetch all projects
+        return await ProjectModel.find({ isDeleted: false })
+          .populate(
+            'modules.moduleId',
+            'name code description version isCore permissions',
+          )
+          .sort({ createdAt: -1 })
+          .lean();
+      }
+    } catch (error) {
+      logger.error('Error fetching projects for user:', {
+        error,
+        userId: user._id,
+        role: user.role,
+        projectId: user.projectId,
+      });
+      return [];
+    }
   }
 }

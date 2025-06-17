@@ -6,6 +6,9 @@ import {
   IsBoolean,
   MaxLength,
   MinLength,
+  IsEnum,
+  IsMongoId,
+  ValidateIf,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { VALIDATION } from '@/common/constants/http-status.constants';
@@ -51,6 +54,17 @@ export class CreateUserDto {
     message: `Password must be at least ${VALIDATION.MIN_PASSWORD_LENGTH} characters long`,
   })
   password!: string;
+
+  @IsOptional()
+  @IsEnum(['user', 'admin', 'superadmin'], {
+    message: 'Role must be one of: user, admin, superadmin',
+  })
+  role?: 'user' | 'admin' | 'superadmin' = 'user';
+
+  @ValidateIf(o => o.role === 'user')
+  @IsMongoId({ message: 'Project ID must be a valid MongoDB ObjectId' })
+  @IsNotEmpty({ message: 'Project ID is required for users with role "user"' })
+  projectId?: string;
 }
 
 export interface CreateUserRequest {
@@ -58,4 +72,6 @@ export interface CreateUserRequest {
   firstName: string;
   lastName: string;
   isActive?: boolean;
+  role?: 'user' | 'admin' | 'superadmin';
+  projectId?: string;
 }

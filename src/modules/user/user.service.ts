@@ -9,6 +9,7 @@ import type {
 import type { UserQueryDto } from './dto/user-query.dto';
 import type { IUser } from '@/models/user.model';
 import type { UpdateQuery, FilterQuery } from 'mongoose';
+import { Types } from 'mongoose';
 import { DatabaseOperationException } from '@/common/exceptions/database.exception';
 import { PAGINATION } from '@/common/constants/http-status.constants';
 import logger from '@/common/utils/logger';
@@ -50,13 +51,17 @@ export class UserService implements IUserService {
         );
       }
 
-      // Create user
+      // Create user with proper type conversion for projectId
       const user = await this.userRepository.create({
         ...userData,
         email: userData.email.toLowerCase().trim(),
         firstName: userData.firstName.trim(),
         lastName: userData.lastName.trim(),
         isActive: userData.isActive ?? true,
+        role: userData.role ?? 'user',
+        projectId: userData.projectId
+          ? new Types.ObjectId(userData.projectId)
+          : undefined,
       });
 
       logger.info('User created successfully', {

@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
-import type { IUser } from '@/models/user.model';
 import type { Session } from 'express-session';
+import type { IUser } from '@/models/user.model';
+import type { IProject } from '@/models/project.model';
 
 export interface IAuthService {
   login(email: string, password: string): Promise<IAuthResponse>;
@@ -11,7 +12,11 @@ export interface IAuthService {
   generateTokensForUser(
     user: IUser,
     channelId?: string,
-  ): Promise<{ accessToken: string; refreshToken: string }>;
+  ): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    projects?: IProject[];
+  }>;
 }
 
 export interface IAuthController {
@@ -29,6 +34,7 @@ export interface IRegisterUserDto {
   firstName: string;
   lastName: string;
   role?: string;
+  projectId?: string;
 }
 
 export interface IVerifyAgentOTPBody {
@@ -45,6 +51,7 @@ export interface IAuthResponse {
   user: IUser;
   accessToken: string;
   refreshToken: string;
+  projects?: IProject[];
 }
 
 export interface ITokenPayload {

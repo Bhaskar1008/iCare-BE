@@ -6,4 +6,5 @@ export class RegisterDto implements IRegisterUserDto {
   firstName!: string;
   lastName!: string;
   role?: string;
+  projectId?: string;
 }

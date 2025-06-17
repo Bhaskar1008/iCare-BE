@@ -40,8 +40,8 @@ export class AuthController extends BaseController implements IAuthController {
 
   public async register(req: Request, res: Response): Promise<void> {
     try {
-      const { email, password, firstName, lastName, role } = req.body;
-
+      const { email, password, firstName, lastName, role, projectId } =
+        req.body;
       if (!email || !password || !firstName || !lastName) {
         this.sendBadRequest(res, 'Missing required fields');
         return;
@@ -55,12 +55,22 @@ export class AuthController extends BaseController implements IAuthController {
         return;
       }
 
+      // Validate projectId if role is 'user'
+      if (role === 'user' && !projectId) {
+        this.sendBadRequest(
+          res,
+          'Project ID is required for users with role "user"',
+        );
+        return;
+      }
+
       const registerDto = new RegisterDto();
       registerDto.email = email;
       registerDto.password = password;
       registerDto.firstName = firstName;
       registerDto.lastName = lastName;
-      registerDto.role = role;
+      registerDto.role = role ?? 'user';
+      registerDto.projectId = projectId;
 
       const user = await this.authService.register(registerDto);
 
@@ -91,9 +101,9 @@ export class AuthController extends BaseController implements IAuthController {
         return;
       }
 
-      const tokens = await this.authService.generateTokensForUser(user);
+      const tokenResponse = await this.authService.generateTokensForUser(user);
 
-      res.cookie('refreshToken', tokens.refreshToken, {
+      res.cookie('refreshToken', tokenResponse.refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         maxAge: SEVEN_DAYS_IN_MS,
@@ -103,7 +113,8 @@ export class AuthController extends BaseController implements IAuthController {
         res,
         {
           user,
-          accessToken: tokens.accessToken,
+          accessToken: tokenResponse.accessToken,
+          projects: tokenResponse.projects,
         },
         'Login successful',
       );
@@ -141,6 +152,7 @@ export class AuthController extends BaseController implements IAuthController {
         {
           user: authResponse.user,
           accessToken: authResponse.accessToken,
+          projects: authResponse.projects,
         },
         'Token refreshed successfully',
       );
@@ -257,6 +269,7 @@ export class AuthController extends BaseController implements IAuthController {
         {
           agent,
           accessToken: tokens.accessToken,
+          projects: tokens.projects,
         },
         'OTP verified successfully',
       );
