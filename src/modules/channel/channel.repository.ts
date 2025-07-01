@@ -3,6 +3,7 @@ import { ChannelModel, type IChannel } from '@/models/channel.model';
 import type { FilterQuery } from 'mongoose';
 import logger from '@/common/utils/logger';
 import type { IChannelRepository } from '@/modules/channel/interfaces/channel.interface';
+import { Types } from 'mongoose';
 
 export class ChannelRepository
   extends BaseRepository<IChannel>
@@ -95,6 +96,32 @@ export class ChannelRepository
         filter,
         page,
         limit,
+      });
+      throw error;
+    }
+  }
+
+  public async findByProjectId(projectId: string): Promise<IChannel[]> {
+    try {
+      logger.debug('Finding channels by project ID', { projectId });
+      const result = await this.model
+        .find({
+          projectId: new Types.ObjectId(projectId),
+          isDeleted: false,
+        })
+        .sort({ createdAt: -1 })
+        .exec();
+      logger.debug('Channels found by project ID', {
+        projectId,
+        count: result.length,
+      });
+      return result;
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.error('Failed to find channels by project ID:', {
+        error: err.message,
+        stack: err.stack,
+        projectId,
       });
       throw error;
     }

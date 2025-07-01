@@ -36,6 +36,7 @@ const channelSchema = new Schema<IChannel>(
         /^[A-Z0-9_]+$/,
         'Channel code can only contain uppercase letters, numbers, and underscores',
       ],
+      index: true,
     },
     projectId: {
       type: Schema.Types.ObjectId,
@@ -67,7 +68,6 @@ const channelSchema = new Schema<IChannel>(
 );
 
 channelSchema.index({ channelName: 1 });
-channelSchema.index({ channelCode: 1 }, { unique: true });
 channelSchema.index({ projectId: 1 });
 channelSchema.index({ channelStatus: 1 });
 channelSchema.index({ isDeleted: 1 });

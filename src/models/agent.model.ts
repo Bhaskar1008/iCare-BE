@@ -5,6 +5,7 @@ import type { IBaseModel } from '@/models/base.model';
 import type { IChannel } from '@/models/channel.model';
 import type { IDesignation } from '@/models/designation.model';
 import type { IUser } from '@/models/user.model';
+import type { IProject } from '@/models/project.model';
 
 const MAX_SKILLS_LENGTH = 50;
 const MAX_LANGUAGES_LENGTH = 30;
@@ -45,6 +46,7 @@ const DOCUMENT_STATUSES = [
   'submitted',
   'approved',
   'rejected',
+  'qcRejected',
   'expired',
 ] as const;
 
@@ -227,6 +229,7 @@ export interface IAgent extends IBaseModel {
   userId: Types.ObjectId | IUser;
   channelId: Types.ObjectId | IChannel;
   designationId: Types.ObjectId | IDesignation;
+  projectId?: Types.ObjectId | IProject;
   agentCode: string;
   employeeId?: string;
   title?: (typeof TITLE_TYPES)[number];
@@ -347,6 +350,10 @@ const agentSchema = new Schema<IAgent>(
       ref: 'Designation',
       required: [true, 'Designation ID is required'],
     },
+    projectId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Project',
+    },
     agentCode: {
       type: String,
       required: [true, 'Agent code is required'],
@@ -454,13 +461,26 @@ const agentSchema = new Schema<IAgent>(
     },
     phoneNumber: {
       type: String,
+      required: [true, 'Phone number is required'],
+      unique: true,
       trim: true,
-      match: [PHONE_NUMBER_REGEX, 'Please enter a valid phone number'],
+      match: [
+        /^[09]\d{10}$/,
+        'Phone number must be 11 digits and start with 0 or 9',
+      ],
+      index: true,
     },
     email: {
       type: String,
+      required: [true, 'Email is required'],
+      unique: true,
       trim: true,
-      match: [EMAIL_REGEX, 'Please enter a valid email'],
+      lowercase: true,
+      match: [
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+        'Please enter a valid email address',
+      ],
+      index: true,
     },
     alternatePhoneNumber: {
       type: String,
@@ -513,7 +533,13 @@ const agentSchema = new Schema<IAgent>(
       status: {
         type: String,
         enum: {
-          values: ['not_started', 'in_progress', 'completed', 'rejected'],
+          values: [
+            'not_started',
+            'in_progress',
+            'completed',
+            'rejected',
+            'qcRejected',
+          ],
           message:
             'Onboarding status must be one of: not_started, in_progress, completed, rejected',
         },
@@ -1414,29 +1440,16 @@ const agentSchema = new Schema<IAgent>(
   },
 );
 
-agentSchema.index({ channelId: 1, agentStatus: 1, isDeleted: 1 });
-agentSchema.index({ designationId: 1, agentStatus: 1 });
-agentSchema.index({ teamLeadId: 1, agentStatus: 1 });
-agentSchema.index({ reportingManagerId: 1, agentStatus: 1 });
-agentSchema.index({ userId: 1, isDeleted: 1 });
-
-agentSchema.index({ email: 1 }, { sparse: true });
-agentSchema.index({ phoneNumber: 1 }, { sparse: true });
-agentSchema.index({ createdAt: -1 });
+agentSchema.index({ agentCode: 1 }, { unique: true });
+agentSchema.index({ projectId: 1 });
+agentSchema.index({ channelId: 1 });
+agentSchema.index({ designationId: 1 });
+agentSchema.index({ userId: 1 });
+agentSchema.index({ teamLeadId: 1 });
+agentSchema.index({ reportingManagerId: 1 });
+agentSchema.index({ agentStatus: 1 });
 agentSchema.index({ isDeleted: 1 });
-agentSchema.index({ joiningDate: -1 });
-
-agentSchema.index({ alternateEmail: 1 }, { sparse: true });
-agentSchema.index({ displayName: 1 });
-agentSchema.index({ nationality: 1 });
-agentSchema.index({ gender: 1 });
-agentSchema.index({ preferredLanguage: 1 });
-agentSchema.index({ dateOfBirth: 1 });
-
-agentSchema.index({ 'onboarding.status': 1 });
-agentSchema.index({ joiningDate: 1, 'onboarding.status': 1 });
-
-agentSchema.index({ 'documents.status': 1, 'documents.isRequired': 1 });
+agentSchema.index({ createdAt: -1 });
 
 agentSchema.set('toJSON', { virtuals: true });
 agentSchema.set('toObject', { virtuals: true });

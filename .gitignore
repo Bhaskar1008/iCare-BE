@@ -11,6 +11,9 @@ pids
 *.seed
 *.pid.lock
 
+# VSCode
+.vscode/settings.json
+
 # Coverage directory used by tools like istanbul
 coverage/
 *.lcov
@@ -69,7 +72,6 @@ jspm_packages/
 # Package manager lock files
 package-lock.json
 yarn.lock
-pnpm-lock.yaml
 
 # Build output
 dist/
@@ -130,3 +132,7 @@ public/
 
 # TernJS port file
 .tern-port 
+
+# SonarQube
+.scannerwork/
+sonar-report.json 

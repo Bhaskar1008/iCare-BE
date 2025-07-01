@@ -1,4 +1,5 @@
-export { CreateHierarchyDto } from './create-hierarchy.dto';
-export { UpdateHierarchyDto } from './update-hierarchy.dto';
-export { HierarchyResponseDto } from './hierarchy-response.dto';
-export { HierarchyQueryDto } from './hierarchy-query.dto';
+export * from './create-hierarchy.dto';
+export * from './update-hierarchy.dto';
+export * from './hierarchy-query.dto';
+export * from './hierarchy-response.dto';
+export * from './hierarchy-by-designation.dto';

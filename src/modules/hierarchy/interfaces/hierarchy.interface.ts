@@ -58,6 +58,18 @@ export interface IHierarchyService {
     data: UpdateHierarchyDto,
   ): Promise<HierarchyResponseDto | null>;
   deleteHierarchy(id: string): Promise<boolean>;
+  getHierarchyByAgentId(agentId: string): Promise<{
+    hierarchies: Array<{
+      hierarchyId: string;
+      hierarchyName: string;
+      hierarchyLevelCode: string;
+      designationName: string;
+    }>;
+  }>;
+  getAgentsByHierarchyDesignation(
+    channelId: string,
+    designationName: string,
+  ): Promise<Array<{ agentId: string; fullName: string }>>;
 }
 
 export interface IHierarchyController {
@@ -71,6 +83,8 @@ export interface IHierarchyController {
   getHierarchyTeamMemberList(req: Request, res: Response): Promise<void>;
   updateHierarchy(req: Request, res: Response): Promise<void>;
   deleteHierarchy(req: Request, res: Response): Promise<void>;
+  getHierarchyByAgentId(req: Request, res: Response): Promise<void>;
+  getAgentsByHierarchyDesignation(req: Request, res: Response): Promise<void>;
 }
 
 export interface IHierarchyRepository {

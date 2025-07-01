@@ -146,7 +146,7 @@ const logger = winston.createLogger({
   ],
 });
 
-if (process.env.MONGODB_URI) {
+if (process.env.MONGODB_URI && process.env.NODE_ENV !== 'test') {
   logger.add(
     new winston.transports.MongoDB({
       db: process.env.MONGODB_URI,
@@ -156,6 +156,7 @@ if (process.env.MONGODB_URI) {
       },
       level: 'http',
       expireAfterSeconds: 2592000,
+      tryReconnect: false,
     }),
   );
 }

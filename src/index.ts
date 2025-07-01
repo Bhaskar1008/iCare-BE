@@ -1,6 +1,7 @@
 import { App } from '@/app';
 import { getDatabaseConfig } from '@/config/database.config';
 import logger from '@/common/utils/logger';
+import { seedModuleConfigData } from '@/modules/module-config/data/seed';
 
 const DEFAULT_PORT = 3000;
 
@@ -48,11 +49,26 @@ const shutdown = async () => {
 process.on('SIGTERM', () => void shutdown());
 process.on('SIGINT', () => void shutdown());
 
-void app.start().catch(error => {
-  const err = error instanceof Error ? error : new Error(String(error));
-  logger.error('Failed to start server:', {
-    error: err.message,
-    stack: err.stack,
+void app
+  .start()
+  .then(async () => {
+    // Seed module configuration data after server starts
+    if (process.env.SEED_DATA === 'true') {
+      try {
+        await seedModuleConfigData();
+        logger.info('Data seeding completed');
+      } catch (error) {
+        logger.error('Error during data seeding:', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  })
+  .catch(error => {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error('Failed to start server:', {
+      error: err.message,
+      stack: err.stack,
+    });
+    process.exit(1);
   });
-  process.exit(1);
-});

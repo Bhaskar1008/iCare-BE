@@ -11,9 +11,9 @@
     "isolatedModules": true,
     "resolveJsonModule": true,
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": "./",
     "noEmit": true,
-    "types": ["node"],
+    "types": ["node", "jest"],
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "incremental": true,
@@ -21,9 +21,10 @@
     "emitDecoratorMetadata": true,
     "baseUrl": "./",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "tests/*": ["tests/*"]
     }
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "tests/**/*.ts", "jest.config.ts"],
   "exclude": ["node_modules", "dist"]
 }

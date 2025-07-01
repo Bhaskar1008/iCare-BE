@@ -2,17 +2,38 @@ import { Schema, model } from 'mongoose';
 import { VALIDATION } from '@/common/constants/http-status.constants';
 import type { IBaseModel } from './base.model';
 
+/** Interface for flexible config fields */
+export interface IConfigField {
+  fieldName: string;
+  fieldType: string;
+  description?: string;
+  values: any[]; // Fully flexible
+}
+
 export interface IModule extends IBaseModel {
   name: string;
   code: string;
   description?: string;
-  defaultConfig: Record<string, any>;
+  accessControl: boolean;
+  defaultConfig: IConfigField[];
   isActive: boolean;
   isCore: boolean;
   version: string;
   dependencies?: string[];
   permissions?: string[];
 }
+const configFieldSchema = new Schema<IConfigField>(
+  {
+    fieldName: { type: String, required: true },
+    fieldType: { type: String, required: true },
+    description: { type: String },
+    values: {
+      type: [Schema.Types.Mixed] as any, // Free-form array of any structure
+      required: true,
+    },
+  },
+  { _id: false }, // Prevents auto-generating _id for each field
+);
 
 const moduleSchema = new Schema<IModule>(
   {
@@ -48,9 +69,13 @@ const moduleSchema = new Schema<IModule>(
         `Description cannot exceed ${VALIDATION.MAX_DESCRIPTION_LENGTH} characters`,
       ],
     },
+    accessControl: {
+      type: Boolean,
+      default: false,
+    },
     defaultConfig: {
-      type: Schema.Types.Mixed,
-      default: {},
+      type: [configFieldSchema] as any,
+      required: true,
     },
     isActive: {
       type: Boolean,

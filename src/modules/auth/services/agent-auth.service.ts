@@ -2,6 +2,7 @@ import { AgentModel, type IAgent } from '@/models/agent.model';
 import { AuthException } from '@/common/exceptions/auth.exception';
 import logger from '@/common/utils/logger';
 import type { IAgentLoginDto } from '../dto/agent-login.dto';
+import { ModuleModel } from '@/models/module.model';
 
 export class AgentAuthService {
   private generateOTP(): string {
@@ -78,10 +79,18 @@ export class AgentAuthService {
 
   public async verifyOTP(agentCode: string, otp: string): Promise<IAgent> {
     try {
+      // First find the agent with populated projectId
       const agent = await AgentModel.findOne({
         agentCode: agentCode.toUpperCase(),
         agentStatus: 'active',
         isDeleted: false,
+      }).populate({
+        path: 'projectId',
+        populate: {
+          path: 'modules.moduleId',
+          model: 'Module',
+          select: 'name code description version isCore permissions',
+        },
       });
 
       if (agent && process.env.NODE_ENV == 'development' && otp == '3003') {
@@ -95,6 +104,35 @@ export class AgentAuthService {
       // Clear OTP after successful verification
       agent.otp = undefined;
       await agent.save();
+
+      // If the modules aren't properly populated, manually populate them
+      if (
+        agent.projectId &&
+        typeof agent.projectId === 'object' &&
+        'modules' in agent.projectId
+      ) {
+        const project = agent.projectId;
+
+        // Check if any module needs to be manually populated
+        for (const moduleRef of project.modules) {
+          if (moduleRef.moduleId && typeof moduleRef.moduleId === 'string') {
+            try {
+              // Fetch the module details
+              const moduleDetails = await ModuleModel.findById(
+                moduleRef.moduleId,
+                'name code description version isCore permissions',
+              );
+
+              if (moduleDetails) {
+                // Replace the string ID with the module object
+                moduleRef.moduleId = moduleDetails;
+              }
+            } catch (err) {
+              logger.warn('Failed to manually populate module', { error: err });
+            }
+          }
+        }
+      }
 
       return agent;
     } catch (error) {

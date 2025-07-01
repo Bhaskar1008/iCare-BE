@@ -17,6 +17,8 @@ import mongoose, {
 import { HIERARCHY } from '@/common/constants/http-status.constants';
 import logger from '@/common/utils/logger';
 import { AgentModel } from '@/models/agent.model';
+import { DesignationModel } from '@/models/designation.model';
+import { HierarchyModel } from '@/models/hierarchy.model';
 
 export class HierarchyService implements IHierarchyService {
   private hierarchyRepository: HierarchyRepository;
@@ -849,5 +851,173 @@ export class HierarchyService implements IHierarchyService {
       createdAt: hierarchy.createdAt,
       updatedAt: hierarchy.updatedAt,
     };
+  }
+
+  public async getHierarchyByAgentId(agentId: string): Promise<{
+    hierarchies: Array<{
+      hierarchyId: string;
+      hierarchyName: string;
+      hierarchyLevelCode: string;
+      designationName: string;
+    }>;
+  }> {
+    try {
+      // Input validation
+      if (!agentId || agentId.trim().length === 0) {
+        throw new Error('Agent ID is required');
+      }
+
+      // Validate MongoDB ObjectId format
+      if (!mongoose.Types.ObjectId.isValid(agentId)) {
+        throw new Error('Invalid agent ID');
+      }
+
+      // Find the agent and populate their designation
+      const agent = await AgentModel.findOne({
+        _id: new mongoose.Types.ObjectId(agentId),
+        isDeleted: false,
+      }).populate('designationId');
+
+      if (!agent) {
+        throw new Error('Agent not found');
+      }
+
+      if (agent.agentStatus !== 'active') {
+        throw new Error('Agent is not active');
+      }
+
+      const designation = await DesignationModel.findOne({
+        _id: agent.designationId,
+        isDeleted: false,
+      }).populate('hierarchyId');
+
+      if (!designation) {
+        throw new Error('Designation not found');
+      }
+
+      const hierarchy = await HierarchyModel.findOne({
+        _id: designation.hierarchyId,
+        isDeleted: false,
+      });
+
+      if (!hierarchy) {
+        throw new Error('Hierarchy not found');
+      }
+
+      // Get all hierarchies with lower level code
+      const hierarchies = await HierarchyModel.aggregate([
+        {
+          $addFields: {
+            hierarchyLevelCodeNum: { $toInt: '$hierarchyLevelCode' },
+          },
+        },
+        {
+          $match: {
+            channelId: hierarchy.channelId,
+            hierarchyLevelCodeNum: {
+              $lt: parseInt(hierarchy.hierarchyLevelCode),
+            },
+            isDeleted: false,
+          },
+        },
+        {
+          $lookup: {
+            from: 'designations',
+            localField: '_id',
+            foreignField: 'hierarchyId',
+            as: 'designations',
+          },
+        },
+        {
+          $unwind: '$designations',
+        },
+        {
+          $group: {
+            _id: {
+              hierarchyId: '$_id',
+              hierarchyName: '$hierarchyName',
+              hierarchyLevelCode: '$hierarchyLevelCode',
+              designationName: '$designations.designationName',
+            },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            hierarchyId: '$_id.hierarchyId',
+            hierarchyName: '$_id.hierarchyName',
+            hierarchyLevelCode: '$_id.hierarchyLevelCode',
+            designationName: '$_id.designationName',
+          },
+        },
+        {
+          $sort: {
+            hierarchyLevelCode: 1,
+          },
+        },
+      ]);
+
+      return { hierarchies };
+    } catch (error) {
+      logger.error('Failed to get hierarchy by agent ID:', {
+        error: error instanceof Error ? error.message : String(error),
+        agentId,
+      });
+      throw error;
+    }
+  }
+
+  public async getAgentsByHierarchyDesignation(
+    channelId: string,
+    designationName: string,
+  ): Promise<Array<{ agentId: string; fullName: string }>> {
+    try {
+      // Input validation
+      if (!channelId || channelId.trim().length === 0) {
+        throw new Error('Channel ID is required');
+      }
+
+      if (!designationName || designationName.trim().length === 0) {
+        throw new Error('Designation name is required');
+      }
+
+      // Validate MongoDB ObjectId format
+      if (!mongoose.Types.ObjectId.isValid(channelId)) {
+        throw new Error('Invalid channel ID');
+      }
+
+      // Find the designation and its hierarchy
+      const designation = await DesignationModel.findOne({
+        channelId: new mongoose.Types.ObjectId(channelId),
+        designationName,
+        isDeleted: false,
+      }).populate<{ hierarchyId: { hierarchyLevelCode: string } }>(
+        'hierarchyId',
+      );
+
+      if (!designation) {
+        throw new Error('Designation not found');
+      }
+
+      // Get all agents with these designations
+      const agents = await AgentModel.find({
+        designationId: new mongoose.Types.ObjectId(designation._id),
+        agentStatus: 'active',
+        isDeleted: false,
+      });
+
+      // Format the response
+      return agents.map(agent => ({
+        agentId: agent._id.toString(),
+        fullName: `${agent.firstName ?? ''} ${agent.lastName ?? ''}`.trim(),
+      }));
+    } catch (error) {
+      logger.error('Failed to get agents by hierarchy designation:', {
+        error: error instanceof Error ? error.message : String(error),
+        channelId,
+        designationName,
+      });
+      throw error;
+    }
   }
 }

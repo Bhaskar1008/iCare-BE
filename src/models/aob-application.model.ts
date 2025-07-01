@@ -2,44 +2,48 @@ import { Schema, model, type Types } from 'mongoose';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface IQcAndDiscrepancyList {
-  documentType: string;
-  documentFormat: string;
-  documentName: string;
-  remarks: string;
+  documentType?: string;
+  documentFormat?: string;
+  documentName?: string;
+  remarks?: string;
+  type?: string;
+  infoName?: string;
   createdAt: Date;
 }
 
 export interface IAobApplication {
   _id: Types.ObjectId;
-  firstName: string;
+  firstName?: string;
   middleName?: string;
-  lastName: string;
+  lastName?: string;
   emailAddress: string;
   mobileNumber: string;
-  address: string;
-  passedLifeInsuranceExam: boolean;
+  address?: string;
+  passedLifeInsuranceExam?: boolean;
   passedLifeInsuranceExamRating?: string;
   passedLifeInsuranceExamDateOfExam?: string;
   passedLifeInsuranceExamVenueOfExam?: string;
-  hasLifeInsuranceCompany: boolean;
+  hasLifeInsuranceCompany?: boolean;
   hasLifeInsuranceCompanyName?: string;
-  hasNonLifeInsuranceCompany: boolean;
+  hasNonLifeInsuranceCompany?: boolean;
   hasNonLifeInsuranceCompanyName?: string;
-  hasVariableInsuranceCompany: boolean;
+  hasVariableInsuranceCompany?: boolean;
   hasVariableInsuranceCompanyName?: string;
-  relatedToPhillifeEmployee: boolean;
-  relatedToPhillifeEmployeeName?: string;
-  relatedToPhillifeEmployeeRelationShip?: string;
-  applicationStatus:
+  relatedToEmployee?: boolean;
+  relatedToEmployeeName?: string;
+  relatedToEmployeeRelationShip?: string;
+  applicationStatus?:
     | 'applicationSubmitted'
     | 'underReview'
     | 'rejected'
+    | 'qcRejected'
     | 'approved'
     | 'returned';
   rejectRemark?: string;
-  applicationId: string;
-  documentId: string;
-  qcAndDiscrepencyList: IQcAndDiscrepancyList[];
+  applicationId?: string;
+  documentId?: string;
+  projectId?: Types.ObjectId;
+  qcAndDiscrepencyList?: IQcAndDiscrepancyList[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -47,20 +51,30 @@ export interface IAobApplication {
 const QcAndDiscrepancyListSchema = new Schema<IQcAndDiscrepancyList>({
   documentType: {
     type: String,
-    required: true,
+    required: false,
   },
   documentFormat: {
     type: String,
     enum: ['pdf', 'png', 'jpg'],
-    required: true,
+    required: false,
   },
   documentName: {
     type: String,
-    required: true,
+    required: false,
   },
   remarks: {
     type: String,
-    required: true,
+    required: false,
+  },
+  type: {
+    type: String,
+    required: false,
+    trim: true,
+  },
+  infoName: {
+    type: String,
+    required: false,
+    trim: true,
   },
   createdAt: {
     type: Date,
@@ -72,7 +86,6 @@ const AobApplicationSchema = new Schema<IAobApplication>(
   {
     firstName: {
       type: String,
-      required: true,
       trim: true,
     },
     middleName: {
@@ -81,7 +94,6 @@ const AobApplicationSchema = new Schema<IAobApplication>(
     },
     lastName: {
       type: String,
-      required: true,
       trim: true,
     },
     emailAddress: {
@@ -99,12 +111,10 @@ const AobApplicationSchema = new Schema<IAobApplication>(
     },
     address: {
       type: String,
-      required: true,
       trim: true,
     },
     passedLifeInsuranceExam: {
       type: Boolean,
-      required: true,
       default: false,
     },
     passedLifeInsuranceExamRating: {
@@ -121,7 +131,6 @@ const AobApplicationSchema = new Schema<IAobApplication>(
     },
     hasLifeInsuranceCompany: {
       type: Boolean,
-      required: true,
       default: false,
     },
     hasLifeInsuranceCompanyName: {
@@ -130,7 +139,6 @@ const AobApplicationSchema = new Schema<IAobApplication>(
     },
     hasNonLifeInsuranceCompany: {
       type: Boolean,
-      required: true,
       default: false,
     },
     hasNonLifeInsuranceCompanyName: {
@@ -139,23 +147,21 @@ const AobApplicationSchema = new Schema<IAobApplication>(
     },
     hasVariableInsuranceCompany: {
       type: Boolean,
-      required: true,
       default: false,
     },
     hasVariableInsuranceCompanyName: {
       type: String,
       trim: true,
     },
-    relatedToPhillifeEmployee: {
+    relatedToEmployee: {
       type: Boolean,
-      required: true,
       default: false,
     },
-    relatedToPhillifeEmployeeName: {
+    relatedToEmployeeName: {
       type: String,
       trim: true,
     },
-    relatedToPhillifeEmployeeRelationShip: {
+    relatedToEmployeeRelationShip: {
       type: String,
       trim: true,
     },
@@ -165,11 +171,11 @@ const AobApplicationSchema = new Schema<IAobApplication>(
         'applicationSubmitted',
         'underReview',
         'rejected',
+        'qcRejected',
         'approved',
         'returned',
       ],
       default: 'applicationSubmitted',
-      required: true,
     },
     rejectRemark: {
       type: String,
@@ -181,9 +187,12 @@ const AobApplicationSchema = new Schema<IAobApplication>(
     },
     documentId: {
       type: String,
-      required: true,
       unique: true,
       default: () => uuidv4(),
+    },
+    projectId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Project',
     },
     qcAndDiscrepencyList: [QcAndDiscrepancyListSchema],
   },
@@ -198,6 +207,7 @@ AobApplicationSchema.index({ emailAddress: 1 });
 AobApplicationSchema.index({ mobileNumber: 1 });
 AobApplicationSchema.index({ applicationStatus: 1 });
 AobApplicationSchema.index({ createdAt: -1 });
+AobApplicationSchema.index({ projectId: 1 });
 
 export const AobApplicationModel = model<IAobApplication>(
   'AobApplication',

@@ -10,6 +10,7 @@ import {
   DatabaseValidationException,
 } from '@/common/exceptions/database.exception';
 import logger from '@/common/utils/logger';
+import { Types } from 'mongoose';
 
 export abstract class BaseRepository<T extends Document> {
   protected model: Model<T>;
@@ -50,7 +51,15 @@ export abstract class BaseRepository<T extends Document> {
   public async findById(id: string): Promise<T | null> {
     try {
       logger.debug(`Finding ${this.modelName} by ID`, { id });
-      const result = await this.model.findById(id).exec();
+
+      if (!Types.ObjectId.isValid(id)) {
+        logger.error(`Invalid ObjectId format for ${this.modelName}`, { id });
+        throw new DatabaseOperationException(
+          `Invalid ID format for ${this.modelName}`,
+        );
+      }
+
+      const result = await this.model.findById(new Types.ObjectId(id)).exec();
       logger.debug(`${this.modelName} found by ID`, { id, found: !!result });
       return result;
     } catch (error) {

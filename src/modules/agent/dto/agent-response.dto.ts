@@ -8,6 +8,9 @@ export class AgentResponseDto {
   designationId!: string | Types.ObjectId;
   designationName?: string;
   designationCode?: string;
+  projectId?: string | Types.ObjectId;
+  projectName?: string;
+  projectCode?: string;
   agentCode!: string;
   employeeId?: string;
   firstName?: string;

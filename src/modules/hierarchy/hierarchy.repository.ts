@@ -4,6 +4,7 @@ import type { IHierarchyRepository } from '@/modules/hierarchy/interfaces/hierar
 import type { FilterQuery } from 'mongoose';
 import { Types } from 'mongoose';
 import logger from '@/common/utils/logger';
+import { DatabaseValidationException } from '@/common/exceptions/database.exception';
 
 export class HierarchyRepository
   extends BaseRepository<IHierarchy>
@@ -16,6 +17,12 @@ export class HierarchyRepository
   public async findByChannel(channelId: string): Promise<IHierarchy[]> {
     try {
       logger.debug('Finding hierarchies by channel', { channelId });
+
+      if (!Types.ObjectId.isValid(channelId)) {
+        logger.error('Invalid ObjectId format for channel', { channelId });
+        throw new DatabaseValidationException('Invalid channel ID format');
+      }
+
       const hierarchies = await this.model
         .find({
           channelId: new Types.ObjectId(channelId),

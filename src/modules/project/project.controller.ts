@@ -291,7 +291,9 @@ export class ProjectController implements IProjectController {
       const { projects, total, page, limit } =
         await this.projectService.getProjects(req.query as ProjectQueryDto);
 
-      const response = projects.map(project => new ProjectResponseDto(project));
+      const response = projects
+        .map(project => (project ? new ProjectResponseDto(project) : null))
+        .filter(Boolean);
 
       res.status(HTTP_STATUS.OK).json({
         status: 'success',

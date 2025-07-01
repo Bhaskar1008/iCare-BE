@@ -11,6 +11,9 @@ export interface IEvent extends Document {
   location: Types.ObjectId;
   attendees: Types.ObjectId[];
   status: EventStatus;
+  eventWith: string;
+  eventSubtype: string;
+  type?: string;
   metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
@@ -48,13 +51,25 @@ const EventSchema = new Schema<IEvent>(
     attendees: [
       {
         type: Schema.Types.ObjectId,
-        ref: 'Attendee',
+        ref: 'Agent',
       },
     ],
     status: {
       type: String,
       enum: Object.values(EventStatus),
       default: EventStatus.SCHEDULED,
+    },
+    eventWith: {
+      type: String,
+      trim: true,
+    },
+    eventSubtype: {
+      type: String,
+      trim: true,
+    },
+    type: {
+      type: String,
+      trim: true,
     },
     metadata: {
       type: Schema.Types.Mixed,
@@ -71,5 +86,9 @@ const EventSchema = new Schema<IEvent>(
 EventSchema.index({ startDateTime: 1, endDateTime: 1 });
 EventSchema.index({ createdBy: 1 });
 EventSchema.index({ status: 1 });
+EventSchema.index({ eventWith: 1 });
+EventSchema.index({ eventSubtype: 1 });
+EventSchema.index({ type: 1 });
+EventSchema.index({ attendees: 1 });
 
 export const Event = model<IEvent>('Event', EventSchema);

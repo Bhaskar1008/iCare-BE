@@ -8,6 +8,7 @@ import type {
   IChannelService,
   IChannelRepository,
 } from '@/modules/channel/interfaces/channel.interface';
+import { Types } from 'mongoose';
 
 export class ChannelService implements IChannelService {
   private channelRepository: IChannelRepository;
@@ -35,6 +36,9 @@ export class ChannelService implements IChannelService {
         channelName: data.channelName,
         channelCode: data.channelCode,
         channelStatus: data.channelStatus ?? 'active',
+        projectId: data.projectId
+          ? new Types.ObjectId(data.projectId)
+          : undefined,
       };
 
       const channel = await this.channelRepository.create(channelData);
@@ -107,6 +111,7 @@ export class ChannelService implements IChannelService {
     page: number = 1,
     limit: number = 10,
     status?: 'active' | 'inactive',
+    projectId?: string,
   ): Promise<{
     channels: ChannelResponseDto[];
     pagination: {
@@ -117,12 +122,13 @@ export class ChannelService implements IChannelService {
     };
   }> {
     try {
-      logger.debug('Getting all channels', { page, limit, status });
+      logger.debug('Getting all channels', { page, limit, status, projectId });
 
       const result = await this.fetchChannelsWithPagination(
         page,
         limit,
         status,
+        projectId,
       );
 
       this.logChannelsRetrieved(result, page, limit);
@@ -136,6 +142,7 @@ export class ChannelService implements IChannelService {
         page,
         limit,
         status,
+        projectId,
       });
       throw error;
     }
@@ -145,8 +152,22 @@ export class ChannelService implements IChannelService {
     page: number,
     limit: number,
     status?: 'active' | 'inactive',
-  ): Promise<{ channels: IChannel[]; total: number; totalPages: number }> {
-    const filter = status ? { channelStatus: status } : {};
+    projectId?: string,
+  ): Promise<{
+    channels: IChannel[];
+    total: number;
+    totalPages: number;
+  }> {
+    const filter: Record<string, unknown> = {};
+
+    if (status) {
+      filter.channelStatus = status;
+    }
+
+    if (projectId) {
+      filter.projectId = new Types.ObjectId(projectId);
+    }
+
     return this.channelRepository.findWithPagination(filter, page, limit);
   }
 
@@ -164,7 +185,11 @@ export class ChannelService implements IChannelService {
   }
 
   private formatChannelsResponse(
-    result: { channels: IChannel[]; total: number; totalPages: number },
+    result: {
+      channels: IChannel[];
+      total: number;
+      totalPages: number;
+    },
     page: number,
     limit: number,
   ): {
@@ -206,12 +231,40 @@ export class ChannelService implements IChannelService {
     }
   }
 
+  public async getChannelsByProjectId(
+    projectId: string,
+  ): Promise<ChannelResponseDto[]> {
+    try {
+      logger.debug('Getting channels by project ID', { projectId });
+      const channels = await this.channelRepository.findByProjectId(projectId);
+
+      logger.debug('Channels retrieved by project ID successfully', {
+        projectId,
+        count: channels.length,
+      });
+      return channels.map(channel => this.mapToResponseDto(channel));
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.error('Failed to get channels by project ID:', {
+        error: err.message,
+        stack: err.stack,
+        projectId,
+      });
+      throw error;
+    }
+  }
+
   private mapToResponseDto(channel: IChannel): ChannelResponseDto {
     return {
       _id: channel._id,
       channelName: channel.channelName,
       channelCode: channel.channelCode,
       channelStatus: channel.channelStatus,
+      projectId:
+        typeof channel.projectId === 'string' ||
+        channel.projectId instanceof Types.ObjectId
+          ? channel.projectId.toString()
+          : undefined,
       createdAt: channel.createdAt,
       updatedAt: channel.updatedAt,
     };

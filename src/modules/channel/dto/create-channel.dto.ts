@@ -5,6 +5,7 @@ import {
   IsIn,
   Matches,
   MaxLength,
+  IsMongoId,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { VALIDATION } from '@/common/constants/http-status.constants';
@@ -38,4 +39,8 @@ export class CreateChannelDto {
     message: 'Status must be either "active" or "inactive"',
   })
   channelStatus?: 'active' | 'inactive' = 'active';
+
+  @IsOptional()
+  @IsMongoId({ message: 'Project ID must be a valid MongoDB ObjectId' })
+  projectId?: string;
 }

@@ -8,6 +8,7 @@ export class UserResponseDto {
   lastLoginAt?: Date;
   createdAt!: Date;
   updatedAt!: Date;
+  projectId?: string;
   otp?: string;
 }
 

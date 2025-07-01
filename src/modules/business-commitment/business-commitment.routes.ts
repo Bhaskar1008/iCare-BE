@@ -242,4 +242,80 @@ router.patch('/:id', (req, res) => controller.update(req, res));
  */
 router.get('/', (req, res) => controller.filter(req, res));
 
+/**
+ * @swagger
+ * /api/business-commitments/export:
+ *   get:
+ *     tags: [Business Commitments]
+ *     summary: Export business commitments to Excel
+ *     description: |
+ *       Downloads business commitments as an Excel file based on agent ID and date range filters.
+ *
+ *       The Excel file will contain the following columns:
+ *       - Agent Code (instead of Agent ID)
+ *       - Commitment Date (YYYY-MM-DD)
+ *       - Commitment Count
+ *       - Achieved Count
+ *       - Achievement Percentage
+ *       - Created At (YYYY-MM-DD HH:mm:ss)
+ *     parameters:
+ *       - in: query
+ *         name: agentId
+ *         schema:
+ *           type: string
+ *         description: Filter by agent ID
+ *       - in: query
+ *         name: fromDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *           pattern: '^\d{4}-\d{2}-\d{2}$'
+ *         description: Start date for filtering (inclusive) in YYYY-MM-DD format
+ *       - in: query
+ *         name: toDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *           pattern: '^\d{4}-\d{2}-\d{2}$'
+ *         description: End date for filtering (inclusive) in YYYY-MM-DD format
+ *     responses:
+ *       200:
+ *         description: Excel file containing business commitments
+ *         content:
+ *           application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       400:
+ *         description: Bad request - validation errors
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Invalid fromDate format. Use YYYY-MM-DD format."
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Failed to generate Excel file"
+ *                 error:
+ *                   type: string
+ *                   example: "Error message details"
+ */
+router.get('/export', (req, res) => controller.exportToExcel(req, res));
+
 export default router;

@@ -1,28 +1,31 @@
 import type { Request, Response } from 'express';
 import { BaseController } from '@/controllers/base.controller';
 import { HierarchyService } from '@/modules/hierarchy/hierarchy.service';
+import logger from '@/common/utils/logger';
+import mongoose from 'mongoose';
 import type {
   CreateHierarchyDto,
   UpdateHierarchyDto,
   HierarchyQueryDto,
   HierarchyResponseDto,
 } from '@/modules/hierarchy/dto';
-import type { ValidatedRequest } from '@/common/interfaces/validation.interface';
 import type {
   IHierarchyController,
   IHierarchyService,
   HierarchyListResponseDto,
 } from '@/modules/hierarchy/interfaces/hierarchy.interface';
+import { DatabaseValidationException } from '@/common/exceptions/database.exception';
+import type { ValidatedRequest } from '@/common/interfaces/validation.interface';
 import {
-  DatabaseOperationException,
-  DatabaseValidationException,
-} from '@/common/exceptions/database.exception';
-import {
-  HTTP_STATUS,
   HIERARCHY,
   PAGINATION,
+  HTTP_STATUS,
 } from '@/common/constants/http-status.constants';
-import logger from '@/common/utils/logger';
+
+interface ErrorWithMessage {
+  message: string;
+  stack?: string;
+}
 
 export class HierarchyController
   extends BaseController
@@ -70,13 +73,6 @@ export class HierarchyController
 
     if (error instanceof DatabaseValidationException) {
       this.sendBadRequest(res, err.message, err);
-    } else if (error instanceof DatabaseOperationException) {
-      this.sendError(
-        res,
-        'Database operation failed',
-        HTTP_STATUS.INTERNAL_SERVER_ERROR,
-        err,
-      );
     } else {
       this.sendError(
         res,
@@ -524,6 +520,139 @@ export class HierarchyController
       );
     } catch (error) {
       this.handleServiceError(error, res, { id: req.params.id });
+    }
+  };
+
+  private formatError(error: unknown): ErrorWithMessage {
+    if (error instanceof Error) {
+      return {
+        message: error.message,
+        stack: error.stack,
+      };
+    }
+    return {
+      message: String(error),
+    };
+  }
+
+  public getHierarchyByAgentId = async (
+    req: Request,
+    res: Response,
+  ): Promise<void> => {
+    try {
+      const { agentId } = req.params;
+
+      if (!agentId) {
+        this.sendBadRequest(res, 'Agent ID is required');
+        return;
+      }
+
+      // Validate MongoDB ObjectId format
+      if (!mongoose.Types.ObjectId.isValid(agentId)) {
+        this.sendBadRequest(res, 'Invalid agent ID format');
+        return;
+      }
+
+      try {
+        const result =
+          await this.hierarchyService.getHierarchyByAgentId(agentId);
+        this.sendSuccess(
+          res,
+          result,
+          'Hierarchy information retrieved successfully',
+        );
+      } catch (error) {
+        if (error instanceof Error) {
+          switch (error.message) {
+            case 'Agent not found':
+              this.sendNotFound(res, error.message);
+              break;
+            case 'Agent is not active':
+            case 'Designation not found':
+            case 'Hierarchy not found':
+              this.sendNotFound(res, error.message);
+              break;
+            default:
+              throw error;
+          }
+        } else {
+          throw error;
+        }
+      }
+    } catch (error) {
+      logger.error(
+        'Failed to get hierarchy by agent ID:',
+        this.formatError(error),
+      );
+      this.sendError(
+        res,
+        'Failed to retrieve hierarchy information',
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        this.formatError(error),
+      );
+    }
+  };
+
+  public getAgentsByHierarchyDesignation = async (
+    req: Request,
+    res: Response,
+  ): Promise<void> => {
+    try {
+      const { channelId } = req.params;
+      const { designationName } = req.query;
+
+      if (!channelId) {
+        this.sendBadRequest(res, 'Channel ID is required');
+        return;
+      }
+
+      if (!designationName || typeof designationName !== 'string') {
+        this.sendBadRequest(res, 'Designation name is required');
+        return;
+      }
+
+      // Validate MongoDB ObjectId format
+      if (!mongoose.Types.ObjectId.isValid(channelId)) {
+        this.sendBadRequest(res, 'Invalid channel ID format');
+        return;
+      }
+
+      try {
+        const result =
+          await this.hierarchyService.getAgentsByHierarchyDesignation(
+            channelId,
+            designationName,
+          );
+        this.sendSuccess(res, result, 'Agents retrieved successfully');
+      } catch (error) {
+        if (error instanceof Error) {
+          switch (error.message) {
+            case 'Channel ID is required':
+            case 'Designation name is required':
+            case 'Invalid channel ID':
+              this.sendBadRequest(res, error.message);
+              break;
+            case 'Designation not found':
+              this.sendNotFound(res, error.message);
+              break;
+            default:
+              throw error;
+          }
+        } else {
+          throw error;
+        }
+      }
+    } catch (error) {
+      logger.error(
+        'Failed to get agents by hierarchy designation:',
+        this.formatError(error),
+      );
+      this.sendError(
+        res,
+        'Failed to retrieve agents',
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        this.formatError(error),
+      );
     }
   };
 }

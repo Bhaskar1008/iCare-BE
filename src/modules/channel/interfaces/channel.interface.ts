@@ -9,6 +9,7 @@ export interface IChannelRepository {
   findById(id: string): Promise<IChannel | null>;
   findByCode(code: string): Promise<IChannel | null>;
   findActiveChannels(): Promise<IChannel[]>;
+  findByProjectId(projectId: string): Promise<IChannel[]>;
   findWithPagination(
     filter?: FilterQuery<IChannel>,
     page?: number,
@@ -20,10 +21,12 @@ export interface IChannelService {
   createChannel(data: CreateChannelDto): Promise<ChannelResponseDto>;
   getChannelById(id: string): Promise<ChannelResponseDto | null>;
   getChannelByCode(code: string): Promise<ChannelResponseDto | null>;
+  getChannelsByProjectId(projectId: string): Promise<ChannelResponseDto[]>;
   getAllChannels(
     page?: number,
     limit?: number,
     status?: 'active' | 'inactive',
+    projectId?: string,
   ): Promise<{
     channels: ChannelResponseDto[];
     pagination: {
@@ -42,4 +45,8 @@ export interface IChannelController {
   getChannelByCode(req: Request, res: Response): Promise<void>;
   getAllChannels(req: Request, res: Response): Promise<void>;
   getActiveChannels(req: Request, res: Response): Promise<void>;
+  getChannelsByProjectId(
+    req: Request<{ projectId: string }>,
+    res: Response,
+  ): Promise<void>;
 }

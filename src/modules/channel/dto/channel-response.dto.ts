@@ -3,6 +3,7 @@ export interface ChannelResponseDto {
   channelName: string;
   channelCode: string;
   channelStatus: 'active' | 'inactive';
+  projectId?: string;
   createdAt: Date;
   updatedAt: Date;
 }

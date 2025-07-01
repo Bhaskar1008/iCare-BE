@@ -104,6 +104,7 @@ export class ProjectResponseDto {
   }
 
   private getModuleId(moduleId: Types.ObjectId | IModule): string {
+    if (!moduleId) return '';
     return this.isModuleObject(moduleId)
       ? moduleId._id.toString()
       : moduleId.toString();

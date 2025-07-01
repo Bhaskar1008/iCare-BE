@@ -1,17 +1,55 @@
 import type { Types } from 'mongoose';
 import type { EventStatus } from '@/common/enums/event-status.enum';
-import type { ILocation } from '@/models/location.model';
-import { IsString, IsOptional, IsDate, IsObject } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsDate,
+  IsObject,
+  IsArray,
+  ValidateNested,
+  IsMongoId,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class LocationDto {
+  @IsMongoId()
+  @IsOptional()
+  _id?: string;
+
+  @IsString()
+  type!: string;
+
+  @IsString()
+  @IsOptional()
+  address?: string;
+
+  @IsString()
+  @IsOptional()
+  city?: string;
+
+  @IsString()
+  @IsOptional()
+  state?: string;
+
+  @IsString()
+  @IsOptional()
+  country?: string;
+
+  @IsString()
+  @IsOptional()
+  postalCode?: string;
+}
 
 export interface UpdateEventDto {
   title?: string;
   description?: string;
   startDateTime?: Date;
   endDateTime?: Date;
-  location?: Omit<ILocation, keyof Document>;
-  attendees?: Types.ObjectId[];
+  location?: string | LocationDto;
+  attendees?: string[];
   status?: EventStatus;
-
+  eventWith?: string;
+  type?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -36,19 +74,29 @@ export class UpdateEventValidationDto {
   @IsOptional()
   createdBy!: Types.ObjectId;
 
-  @IsString()
   @IsOptional()
-  location!: Omit<ILocation, keyof Document>;
+  @ValidateNested()
+  @Type(() => LocationDto)
+  location?: LocationDto;
 
   @IsString()
   @IsOptional()
   status!: EventStatus;
 
+  @IsArray()
+  @IsMongoId({ each: true })
+  @IsOptional()
+  attendees!: string[];
+
   @IsString()
   @IsOptional()
-  attendees!: Types.ObjectId[];
+  eventWith?: string;
+
+  @IsString()
+  @IsOptional()
+  type?: string;
 
   @IsObject()
   @IsOptional()
-  metadata!: Record<string, any>;
+  metadata!: Record<string, unknown>;
 }

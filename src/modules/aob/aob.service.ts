@@ -13,6 +13,8 @@ import { AobDocumentHistoryModel } from '@/models/aob-document-history.model';
 import { v4 as uuidv4 } from 'uuid';
 import { ApplicantOtpModel } from '@/models/applicant-otp.model';
 import mongoose from 'mongoose';
+import type { DocumentStatusUpdateDto } from './dto/batch-update-document-status.dto';
+import { AobEmailTemplates } from '@/emailTemplates/aob.templates';
 
 export class AobService {
   private aobRepository: AobRepository;
@@ -21,7 +23,7 @@ export class AobService {
   constructor() {
     this.aobRepository = new AobRepository();
     this.s3Client = new S3Client({
-      region: 'ap-southeast-1',
+      region: process.env.AWS_REGION ?? 'ap-southeast-1',
       endpoint: 'https://s3.ap-southeast-1.amazonaws.com',
       credentials: {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? '',
@@ -120,8 +122,9 @@ export class AobService {
     documentId: string,
     documentType: string,
     documentFormat: string,
-    documentStatus: 'approve' | 'reject' | 'documentSubmitted',
+    documentStatus: 'approve' | 'reject' | 'qcReject' | 'documentSubmitted',
     file: Express.Multer.File,
+    projectId?: string,
   ): Promise<{ document: any }> {
     try {
       // Validate document type exists in master
@@ -131,10 +134,19 @@ export class AobService {
         throw new Error('Invalid document type');
       }
 
-      // Validate application exists
+      // Get the application
       const application = await AobApplicationModel.findOne({ documentId });
       if (!application) {
         throw new Error('Application not found');
+      }
+
+      // Update projectId if provided
+      if (projectId && mongoose.Types.ObjectId.isValid(projectId)) {
+        await AobApplicationModel.findByIdAndUpdate(
+          application._id,
+          { projectId: new mongoose.Types.ObjectId(projectId) },
+          { new: true },
+        );
       }
 
       // Validate file type
@@ -184,21 +196,25 @@ export class AobService {
         { upsert: true, new: true },
       );
 
-      // Create history record if document is rejected
-      if (documentStatus === 'reject') {
-        await AobDocumentHistoryModel.create({
-          documentId,
-          applicationId: application.applicationId,
-          documentStatus,
-          documentType,
-          documentFormat: documentFormat as 'pdf' | 'png' | 'jpg',
-          documentName: file.originalname,
-          presignedS3Url: s3Url,
-          s3Key,
-        });
+      // Create history record for all status changes
+      await AobDocumentHistoryModel.create({
+        documentId,
+        applicationId: application.applicationId,
+        documentStatus,
+        documentType,
+        documentFormat: documentFormat as 'pdf' | 'png' | 'jpg',
+        documentName: file.originalname,
+        presignedS3Url: s3Url,
+        s3Key,
+        remarks: document.remarks,
+        type: document.type,
+        infoName: document.infoName,
+      });
 
+      // Handle specific status actions
+      if (documentStatus === 'reject') {
         // Check if document type already exists in qcAndDiscrepencyList
-        const existingDiscrepancy = application.qcAndDiscrepencyList.find(
+        const existingDiscrepancy = application.qcAndDiscrepencyList?.find(
           item => item.documentType === documentType,
         );
 
@@ -213,6 +229,8 @@ export class AobService {
                   documentFormat: documentFormat as 'pdf' | 'png' | 'jpg',
                   documentName: file.originalname,
                   remarks: document.remarks ?? 'Document rejected',
+                  type: document.type,
+                  infoName: document.infoName,
                   createdAt: new Date(),
                 },
               },
@@ -235,11 +253,34 @@ export class AobService {
                 'qcAndDiscrepencyList.$.documentName': file.originalname,
                 'qcAndDiscrepencyList.$.remarks':
                   document.remarks ?? 'Document rejected',
+                'qcAndDiscrepencyList.$.type': document.type,
+                'qcAndDiscrepencyList.$.infoName': document.infoName,
                 'qcAndDiscrepencyList.$.createdAt': new Date(),
               },
             },
           );
         }
+      } else if (documentStatus === 'qcReject') {
+        // Handle qcReject status - update both document and application status
+        // Update application status to qcRejected
+        await AobApplicationModel.findByIdAndUpdate(
+          application._id,
+          {
+            applicationStatus: 'qcRejected',
+            $push: {
+              qcAndDiscrepencyList: {
+                documentType,
+                documentFormat: documentFormat as 'pdf' | 'png' | 'jpg',
+                documentName: file.originalname,
+                remarks: document.remarks ?? 'Document QC rejected',
+                type: document.type,
+                infoName: document.infoName,
+                createdAt: new Date(),
+              },
+            },
+          },
+          { new: true },
+        );
       } else if (documentStatus === 'approve') {
         // Remove document from qcAndDiscrepencyList if status is approve
         await AobApplicationModel.updateOne(
@@ -306,6 +347,22 @@ export class AobService {
           isUsed: false,
         });
 
+        await this.sendOtpEmail(emailId, otp);
+        // Send email with OTP
+        if (process.env.NODE_ENV !== 'development') {
+          try {
+            await this.sendOtpEmail(emailId, otp);
+            logger.info('OTP email sent successfully', { emailId });
+          } catch (emailError) {
+            logger.error('Failed to send OTP email:', {
+              error: emailError,
+              emailId,
+            });
+            // Continue even if email fails - we'll return success
+            // since the OTP was generated and stored
+          }
+        }
+
         return {
           exists: true,
           message: `OTP is sent to ${emailId}`,
@@ -319,6 +376,17 @@ export class AobService {
     } catch (error) {
       logger.error('Failed to check applicant existence:', { error, emailId });
       throw error;
+    }
+  }
+
+  private async sendOtpEmail(email: string, otp: string): Promise<void> {
+    try {
+      await AobEmailTemplates.sendOtpEmail(email, otp);
+      logger.debug('OTP email sent successfully', { email });
+    } catch (error) {
+      logger.error('Failed to send OTP email:', { error, email });
+      // Don't throw the error - let the calling method handle it
+      // This prevents email failures from breaking the entire flow
     }
   }
 
@@ -420,6 +488,20 @@ export class AobService {
         isUsed: false,
       });
 
+      // Send email with OTP
+      if (process.env.NODE_ENV !== 'development') {
+        try {
+          await this.sendOtpEmail(emailId, otp);
+          logger.info('OTP email sent successfully', { emailId });
+        } catch (emailError) {
+          logger.error('Failed to send OTP email:', {
+            error: emailError,
+            emailId,
+          });
+          // Continue even if email fails
+        }
+      }
+
       return {
         success: true,
         message: `OTP is resent to ${emailId}`,
@@ -436,11 +518,29 @@ export class AobService {
     try {
       logger.debug('Sending email verification OTP', { emailId });
 
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(emailId)) {
+        return {
+          success: false,
+          message: 'Invalid email format',
+        };
+      }
+
+      // Check if email exists in application
+      const application = await AobApplicationModel.findOne({
+        emailAddress: emailId,
+      });
+
+      if (!application) {
+        return {
+          success: false,
+          message: 'Email not found in our records',
+        };
+      }
+
       // Generate OTP
-      const otp =
-        process.env.NODE_ENV === 'development'
-          ? '3003'
-          : Math.floor(1000 + Math.random() * 9000).toString();
+      const otp = Math.floor(1000 + Math.random() * 9000).toString();
 
       // Remove any existing OTP for this email
       await ApplicantOtpModel.deleteMany({ emailAddress: emailId });
@@ -451,6 +551,17 @@ export class AobService {
         otp,
         isUsed: false,
       });
+
+      // Send email with OTP
+      try {
+        await this.sendOtpEmail(emailId, otp);
+        logger.info('OTP email sent successfully', { emailId });
+      } catch (emailError) {
+        logger.error('Failed to send OTP email:', {
+          error: emailError,
+          emailId,
+        });
+      }
 
       return {
         success: true,
@@ -468,7 +579,13 @@ export class AobService {
   async verifyEmailOtp(
     emailId: string,
     otp: string,
-  ): Promise<{ success: boolean; message: string }> {
+  ): Promise<{
+    success: boolean;
+    message: string;
+    applicationStatus?: string;
+    applicationId?: string;
+    rejectionReason?: string;
+  }> {
     try {
       logger.debug('Verifying email OTP', { emailId });
 
@@ -508,6 +625,22 @@ export class AobService {
       // Delete the OTP record
       await ApplicantOtpModel.deleteOne({ _id: otpRecord._id });
 
+      // Check application status if email exists
+      const application = await AobApplicationModel.findOne({
+        emailAddress: emailId,
+      });
+      if (application) {
+        return {
+          success: true,
+          message: this.getStatusMessage(application.applicationStatus),
+          applicationStatus: application.applicationStatus,
+          rejectionReason:
+            application.applicationStatus === 'rejected'
+              ? application.rejectRemark
+              : undefined,
+        };
+      }
+
       return {
         success: true,
         message: 'Email is verified',
@@ -515,6 +648,23 @@ export class AobService {
     } catch (error) {
       logger.error('Failed to verify email OTP:', { error, emailId });
       throw error;
+    }
+  }
+
+  private getStatusMessage(status?: string): string {
+    switch (status) {
+      case 'approved':
+        return 'Your application has been approved. You can proceed with the next steps.';
+      case 'rejected':
+        return 'Your application has been rejected. Please contact support for more information.';
+      case 'returned':
+        return 'Your application has been returned for corrections.';
+      case 'underReview':
+        return 'Your application is currently under review.';
+      case 'applicationSubmitted':
+        return 'Your application has been submitted successfully and is pending review.';
+      default:
+        return 'Email is verified.';
     }
   }
 
@@ -542,6 +692,263 @@ export class AobService {
       logger.error('Failed to fetch application by ID:', {
         error,
         applicationId,
+      });
+      throw error;
+    }
+  }
+
+  async getDocumentDetails(
+    applicationId: string,
+    documentId: string,
+  ): Promise<{
+    success: boolean;
+    data?: any;
+    message?: string;
+  }> {
+    try {
+      logger.debug('Fetching document details', { applicationId, documentId });
+
+      // Find the application
+      const application = await AobApplicationModel.findOne({
+        applicationId,
+      });
+
+      if (!application) {
+        return {
+          success: false,
+          message: 'Application not found',
+        };
+      }
+
+      // Find the document
+      const document = await AobDocumentModel.findOne({
+        documentId,
+        applicationId,
+      });
+
+      if (!document) {
+        return {
+          success: false,
+          message: 'Document not found',
+        };
+      }
+
+      // Get document history
+      const history = await this.getQcHistoryList(documentId);
+
+      // Find if document is in QC discrepancy list
+      const discrepancy = application.qcAndDiscrepencyList?.find(
+        item => item.documentType === document.documentType,
+      );
+
+      return {
+        success: true,
+        data: {
+          document,
+          history,
+          discrepancy: discrepancy ?? null,
+          application: {
+            _id: application._id,
+            applicationId: application.applicationId,
+            firstName: application.firstName,
+            lastName: application.lastName,
+            emailAddress: application.emailAddress,
+            mobileNumber: application.mobileNumber,
+            applicationStatus: application.applicationStatus,
+            projectId: application.projectId,
+          },
+        },
+        message: 'Document details retrieved successfully',
+      };
+    } catch (error) {
+      logger.error('Failed to fetch document details:', {
+        error,
+        applicationId,
+        documentId,
+      });
+      throw error;
+    }
+  }
+
+  async batchUpdateDocumentStatus(
+    applicationId: string,
+    documents: DocumentStatusUpdateDto[],
+    projectId?: string,
+  ): Promise<{ success: boolean; results: any[] }> {
+    try {
+      logger.debug('Batch updating document status', {
+        applicationId,
+        documentsCount: documents.length,
+        projectId,
+      });
+
+      // Validate application exists
+      const application = await AobApplicationModel.findOne({ applicationId });
+      if (!application) {
+        throw new Error('Application not found');
+      }
+
+      // Update projectId if provided
+      if (projectId && mongoose.Types.ObjectId.isValid(projectId)) {
+        await AobApplicationModel.findByIdAndUpdate(
+          application._id,
+          { projectId: new mongoose.Types.ObjectId(projectId) },
+          { new: true },
+        );
+      }
+
+      const results = [];
+
+      // Process each document update
+      for (const doc of documents) {
+        try {
+          // Update document status using _id
+          const updatedDocument = await AobDocumentModel.findByIdAndUpdate(
+            doc._id,
+            {
+              documentStatus: doc.documentStatus,
+              ...(doc.remarks && { remarks: doc.remarks }),
+            },
+            { new: true },
+          );
+
+          if (!updatedDocument) {
+            results.push({
+              documentId: doc.documentId,
+              _id: doc._id,
+              success: false,
+              message: 'Document not found',
+            });
+            continue;
+          }
+
+          // Create history record for all status changes
+          await AobDocumentHistoryModel.create({
+            documentId: doc.documentId,
+            applicationId,
+            documentStatus: doc.documentStatus,
+            documentType: updatedDocument.documentType,
+            documentFormat: updatedDocument.documentFormat,
+            documentName: updatedDocument.documentName,
+            presignedS3Url: updatedDocument.presignedS3Url,
+            s3Key: updatedDocument.s3Key,
+            remarks: doc.remarks,
+            type: doc.type,
+            infoName: doc.infoName,
+          });
+
+          // Handle document status specific actions
+          if (doc.documentStatus === 'reject') {
+            // Update or add to qcAndDiscrepencyList
+            const existingDiscrepancy = application.qcAndDiscrepencyList?.find(
+              item => item.documentType === updatedDocument.documentType,
+            );
+
+            if (!existingDiscrepancy) {
+              // Add new discrepancy
+              await AobApplicationModel.findByIdAndUpdate(
+                application._id,
+                {
+                  $push: {
+                    qcAndDiscrepencyList: {
+                      documentType: updatedDocument.documentType,
+                      documentFormat: updatedDocument.documentFormat,
+                      documentName: updatedDocument.documentName,
+                      remarks: doc.remarks ?? 'Document rejected',
+                      type: doc.type,
+                      infoName: doc.infoName,
+                      createdAt: new Date(),
+                    },
+                  },
+                },
+                { new: true },
+              );
+            } else {
+              // Update existing discrepancy
+              await AobApplicationModel.updateOne(
+                {
+                  _id: application._id,
+                  'qcAndDiscrepencyList.documentType':
+                    updatedDocument.documentType,
+                },
+                {
+                  $set: {
+                    'qcAndDiscrepencyList.$.remarks':
+                      doc.remarks ?? 'Document rejected',
+                    'qcAndDiscrepencyList.$.type': doc.type,
+                    'qcAndDiscrepencyList.$.infoName': doc.infoName,
+                    'qcAndDiscrepencyList.$.createdAt': new Date(),
+                  },
+                },
+              );
+            }
+          } else if (doc.documentStatus === 'qcReject') {
+            // Handle qcReject status - update both document and application status
+            // Update application status to qcRejected
+            await AobApplicationModel.findByIdAndUpdate(
+              application._id,
+              {
+                applicationStatus: 'qcRejected',
+                $push: {
+                  qcAndDiscrepencyList: {
+                    documentType: updatedDocument.documentType,
+                    documentFormat: updatedDocument.documentFormat,
+                    documentName: updatedDocument.documentName,
+                    remarks: doc.remarks ?? 'Document QC rejected',
+                    type: doc.type,
+                    infoName: doc.infoName,
+                    createdAt: new Date(),
+                  },
+                },
+              },
+              { new: true },
+            );
+          } else if (doc.documentStatus === 'approve') {
+            // Remove from qcAndDiscrepencyList if approved
+            await AobApplicationModel.updateOne(
+              { _id: application._id },
+              {
+                $pull: {
+                  qcAndDiscrepencyList: {
+                    documentType: updatedDocument.documentType,
+                  },
+                },
+              },
+            );
+          }
+
+          results.push({
+            documentId: doc.documentId,
+            _id: doc._id,
+            success: true,
+            status: doc.documentStatus,
+          });
+        } catch (docError) {
+          logger.error('Error processing document in batch update:', {
+            error: docError,
+            documentId: doc.documentId,
+            _id: doc._id,
+          });
+
+          results.push({
+            documentId: doc.documentId,
+            _id: doc._id,
+            success: false,
+            message:
+              docError instanceof Error ? docError.message : 'Unknown error',
+          });
+        }
+      }
+
+      return {
+        success: true,
+        results,
+      };
+    } catch (error) {
+      logger.error('Failed to batch update document status:', {
+        error,
+        applicationId,
+        documentsCount: documents.length,
       });
       throw error;
     }
@@ -579,5 +986,41 @@ export class AobService {
       createdAt: documentMaster.createdAt,
       updatedAt: documentMaster.updatedAt,
     };
+  }
+
+  async sendShareableLinkEmail(emailId: string, link: string): Promise<void> {
+    try {
+      logger.debug('Sending shareable link email', { emailId });
+      await AobEmailTemplates.sendShareableLinkEmail(emailId, link);
+      logger.info('Shareable link email sent successfully', { emailId });
+    } catch (error) {
+      logger.error('Failed to send shareable link email:', {
+        error: error instanceof Error ? error.message : String(error),
+        emailId,
+      });
+      // Don't throw the error - let the calling method handle it
+      // This prevents email failures from breaking the entire flow
+    }
+  }
+
+  async sendShareableLinkSms(smsNo: string, _link: string): Promise<void> {
+    try {
+      logger.debug('Sending shareable link SMS', { smsNo });
+
+      // TODO: Implement actual SMS sending logic
+      // This is a placeholder implementation
+      // You would typically use a service like Twilio, AWS SNS, or similar
+
+      // Simulate async operation
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      logger.info('Shareable link SMS sent successfully', { smsNo });
+    } catch (error) {
+      logger.error('Failed to send shareable link SMS:', {
+        error: error instanceof Error ? error.message : String(error),
+        smsNo,
+      });
+      throw error;
+    }
   }
 }

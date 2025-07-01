@@ -15,21 +15,63 @@ import type {
 } from '@/modules/agent/interfaces/agent.interface';
 import type { ValidatedRequest } from '@/common/interfaces/validation.interface';
 import type { GetAgentHierarchyDto } from './dto/get-agent-hierarchy.dto';
+import { BulkAgentUploadService } from './services/bulk-agent-upload.service';
+import { AgentRepository } from './agent.repository';
+import { ChannelRepository } from '../channel/channel.repository';
+import { DesignationRepository } from '../designation/designation.repository';
+import { UserRepository } from '../user/user.repository';
+import { ProjectRepository } from '../project/project.repository';
+import { BadRequestException } from '@/common/exceptions/bad-request.exception';
 
 export class AgentController
   extends BaseController
   implements IAgentController
 {
   private agentService: IAgentService;
+  private readonly agentRepository: AgentRepository;
+  private readonly bulkAgentUploadService: BulkAgentUploadService;
 
   constructor() {
     super();
     this.agentService = new AgentService();
+    this.agentRepository = new AgentRepository();
+    const channelRepository = new ChannelRepository();
+    const designationRepository = new DesignationRepository();
+    const userRepository = new UserRepository();
+    const projectRepository = new ProjectRepository();
+
+    this.bulkAgentUploadService = new BulkAgentUploadService(
+      this.agentRepository,
+      channelRepository,
+      designationRepository,
+      userRepository,
+      projectRepository,
+    );
   }
 
   public createAgent = async (req: Request, res: Response): Promise<void> => {
     try {
       logger.debug('Create agent request received', req.body);
+
+      // Validate that either agentCode or generateAgentCode is provided
+      const { agentCode, generateAgentCode, projectId } = req.body;
+
+      if (!agentCode && !generateAgentCode) {
+        this.sendBadRequest(
+          res,
+          'Either agentCode or generateAgentCode must be provided',
+        );
+        return;
+      }
+
+      // If generateAgentCode is true, projectId is required
+      if (generateAgentCode && !projectId) {
+        this.sendBadRequest(
+          res,
+          'Project ID is required when generating agent code automatically',
+        );
+        return;
+      }
 
       // req.body is now validated and transformed by ValidationPipe
       const agentData = req.body as CreateAgentDto;
@@ -163,6 +205,7 @@ export class AgentController
       const status = queryParams.status;
       const channelId = queryParams.channelId;
       const userId = queryParams.userId;
+      const projectId = queryParams.projectId;
 
       const result = await this.agentService.getAllAgents(
         page,
@@ -170,6 +213,7 @@ export class AgentController
         status,
         channelId,
         userId,
+        projectId,
       );
 
       logger.debug('Agents retrieved successfully', {
@@ -267,6 +311,47 @@ export class AgentController
     }
   };
 
+  public getAgentsByProjectId = async (
+    req: Request,
+    res: Response,
+  ): Promise<void> => {
+    try {
+      const { projectId } = req.params;
+      logger.debug('Get agents by project ID request received', { projectId });
+
+      if (!projectId) {
+        this.sendBadRequest(res, 'Project ID is required');
+        return;
+      }
+
+      const agents = await this.agentService.getAgentsByProjectId(projectId);
+
+      logger.debug('Agents by project ID retrieved successfully', {
+        projectId,
+        count: agents.length,
+      });
+      this.sendSuccess(
+        res,
+        agents,
+        'Agents by project ID retrieved successfully',
+      );
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.error('Failed to get agents by project ID:', {
+        error: err.message,
+        stack: err.stack,
+        projectId: req.params.projectId,
+      });
+
+      this.sendError(
+        res,
+        'Failed to retrieve agents by project ID',
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        err,
+      );
+    }
+  };
+
   public getAgentsByUserId = async (
     req: Request,
     res: Response,
@@ -336,6 +421,97 @@ export class AgentController
         HTTP_STATUS.INTERNAL_SERVER_ERROR,
         err,
       );
+    }
+  }
+
+  public bulkUploadAgents = async (
+    req: Request,
+    res: Response,
+  ): Promise<void> => {
+    try {
+      logger.debug('Bulk upload agents request received');
+
+      // Check if file is uploaded
+      if (!req.file) {
+        this.sendBadRequest(res, 'Excel file is required');
+        return;
+      }
+
+      // Get projectId from body
+      const { projectId } = req.body;
+
+      if (!projectId) {
+        this.sendBadRequest(res, 'Project ID is required');
+        return;
+      }
+
+      // Process the Excel file
+      const result = await this.bulkAgentUploadService.processExcelFile(
+        req.file.buffer,
+        projectId as string,
+      );
+
+      const isSuccess = result.failureCount === 0;
+      if (isSuccess) {
+        this.sendSuccess(
+          res,
+          result,
+          `Successfully processed ${result.successCount} agents`,
+        );
+      } else {
+        this.sendBadRequest(
+          res,
+          `Failed to process ${result.failureCount} agents. Check errors for details.`,
+        );
+      }
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.error('Failed to bulk upload agents:', {
+        error: err.message,
+        stack: err.stack,
+      });
+
+      this.sendError(
+        res,
+        'Failed to bulk upload agents',
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        err,
+      );
+    }
+  };
+
+  public async bulkUpload(req: Request, res: Response): Promise<void> {
+    try {
+      const { projectId, batchSize } = req.body;
+      const fileBuffer = req.file?.buffer;
+
+      if (!fileBuffer) {
+        throw new BadRequestException('No file uploaded');
+      }
+
+      const result = await this.bulkAgentUploadService.processExcelFile(
+        fileBuffer,
+        projectId as string,
+        batchSize as number,
+      );
+
+      res.status(HTTP_STATUS.OK).json({
+        success: true,
+        message: 'Bulk upload processed successfully',
+        data: result,
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        res.status(HTTP_STATUS.BAD_REQUEST).json({
+          success: false,
+          message: error.message,
+        });
+      } else {
+        res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+          success: false,
+          message: 'An unknown error occurred',
+        });
+      }
     }
   }
 }

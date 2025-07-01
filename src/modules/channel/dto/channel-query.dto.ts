@@ -1,4 +1,4 @@
-import { IsOptional, IsNumberString, IsIn } from 'class-validator';
+import { IsOptional, IsNumberString, IsIn, IsMongoId } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { PAGINATION } from '@/common/constants/http-status.constants';
 
@@ -30,4 +30,8 @@ export class ChannelQueryDto {
     message: 'Status must be either "active" or "inactive"',
   })
   status?: 'active' | 'inactive';
+
+  @IsOptional()
+  @IsMongoId({ message: 'Project ID must be a valid MongoDB ObjectId' })
+  projectId?: string;
 }

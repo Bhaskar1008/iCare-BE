@@ -5,12 +5,14 @@ export interface IAobDocumentHistory extends Document {
   presignedS3Url: string;
   documentId: string;
   applicationId: string;
-  documentStatus: 'approve' | 'reject' | 'documentSubmitted';
+  documentStatus: 'approve' | 'reject' | 'documentSubmitted' | 'qcReject';
   remarks?: string;
   documentType: 'pdf' | 'png' | 'jpg';
   documentFormat: 'pdf' | 'png' | 'jpg';
   documentName: string;
   s3Key: string;
+  type?: string;
+  infoName?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -33,7 +35,7 @@ const AobDocumentHistorySchema = new Schema<IAobDocumentHistory>(
     },
     documentStatus: {
       type: String,
-      enum: ['approve', 'reject', 'documentSubmitted'],
+      enum: ['approve', 'reject', 'qcReject', 'documentSubmitted'],
       required: true,
     },
     remarks: {
@@ -57,7 +59,17 @@ const AobDocumentHistorySchema = new Schema<IAobDocumentHistory>(
     s3Key: {
       type: String,
       required: true,
-      unique: true,
+      // unique: true,
+      trim: true,
+    },
+    type: {
+      type: String,
+      required: false,
+      trim: true,
+    },
+    infoName: {
+      type: String,
+      required: false,
       trim: true,
     },
   },

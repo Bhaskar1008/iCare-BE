@@ -5,6 +5,7 @@ import {
   CreateHierarchyDto,
   UpdateHierarchyDto,
   HierarchyQueryDto,
+  HierarchyByDesignationDto,
 } from '@/modules/hierarchy/dto';
 
 const router = Router();
@@ -613,6 +614,101 @@ router.get('/channel/:channelId/roots', hierarchyController.getRootHierarchies);
 router.get(
   '/parent/:parentId/children',
   hierarchyController.getChildHierarchies,
+);
+
+/**
+ * @swagger
+ * /api/hierarchies/agent/{agentId}:
+ *   get:
+ *     tags: [Hierarchies]
+ *     summary: Get hierarchy information by agent ID
+ *     description: Retrieves hierarchy information and lower level hierarchies based on agent's designation
+ *     parameters:
+ *       - in: path
+ *         name: agentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Agent ID
+ *     responses:
+ *       200:
+ *         description: Hierarchy information retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         hierarchies:
+ *                           type: array
+ *                           items:
+ *                             type: string
+ *                             description: Designation names
+ *       400:
+ *         description: Bad request - invalid agent ID
+ *       404:
+ *         description: Agent not found
+ *       500:
+ *         description: Internal server error
+ */
+router.get('/agent/:agentId', hierarchyController.getHierarchyByAgentId);
+
+/**
+ * @swagger
+ * /api/hierarchies/channel/{channelId}/designation:
+ *   get:
+ *     tags: [Hierarchies]
+ *     summary: Get agents under a designation hierarchy
+ *     description: Retrieves all agents under hierarchies lower than the specified designation's hierarchy level
+ *     parameters:
+ *       - in: path
+ *         name: channelId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Channel ID
+ *       - in: query
+ *         name: designationName
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Designation name to lookup
+ *     responses:
+ *       200:
+ *         description: Agents retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           agentId:
+ *                             type: string
+ *                             description: Agent's unique identifier
+ *                           fullName:
+ *                             type: string
+ *                             description: Agent's full name
+ *       400:
+ *         description: Bad request - invalid parameters
+ *       404:
+ *         description: Channel or designation not found
+ *       500:
+ *         description: Internal server error
+ */
+router.get(
+  '/channel/:channelId/designation',
+  ValidationPipe.validateQuery(HierarchyByDesignationDto),
+  hierarchyController.getAgentsByHierarchyDesignation,
 );
 
 export default router;

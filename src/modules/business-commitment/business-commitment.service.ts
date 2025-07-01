@@ -25,9 +25,7 @@ export class BusinessCommitmentService {
     }
   }
 
-  async create(
-    createDto: CreateBusinessCommitmentDto,
-  ): Promise<{
+  async create(createDto: CreateBusinessCommitmentDto): Promise<{
     commitment?: IBusinessCommitment;
     existingCommitment?: IBusinessCommitment;
   }> {
@@ -99,20 +97,12 @@ export class BusinessCommitmentService {
   async filter(
     filterDto: FilterBusinessCommitmentDto,
   ): Promise<IBusinessCommitment[]> {
-    // If an agentId is provided, validate the agent
-    if (filterDto.agentId) {
-      await this.verifyUsers(filterDto.agentId);
-    }
-
-    // Base query to fetch non-deleted commitments
     const query: FilterQuery<IBusinessCommitment> = { isDeleted: false };
 
-    // Filter by agentId if provided
     if (filterDto.agentId) {
       query.agentId = filterDto.agentId;
     }
 
-    // Filter by commitment date range (fromDate and/or toDate)
     if (filterDto.fromDate || filterDto.toDate) {
       query.commitmentDate = {};
 
@@ -123,22 +113,18 @@ export class BusinessCommitmentService {
       if (filterDto.toDate) {
         query.commitmentDate.$lte = filterDto.toDate;
       }
-    } else {
-      // Default filter: today's commitments only
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-
-      query.commitmentDate = {
-        $gte: today,
-        $lt: tomorrow,
-      };
     }
 
-    // Execute the query and return the results
     return await BusinessCommitment.find(query)
-      .populate('agentId', 'name email')
-      .sort({ commitmentDate: -1 });
+      .populate({
+        path: 'agentId',
+        select: 'agentCode firstName lastName designationId',
+        populate: {
+          path: 'designationId',
+          select: 'designationName',
+        },
+      })
+      .sort({ commitmentDate: -1 })
+      .lean();
   }
 }

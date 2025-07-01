@@ -2,12 +2,12 @@ import {
   IsNotEmpty,
   IsString,
   IsOptional,
-  IsObject,
   IsBoolean,
   IsArray,
   Matches,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import type { IConfigField } from '@/models/module.model';
 
 export class CreateModuleDto {
   @IsNotEmpty()
@@ -42,9 +42,9 @@ export class CreateModuleDto {
   @Type(() => String)
   subModules?: string[];
 
-  @IsObject()
+  @IsArray()
   @IsOptional()
-  defaultConfig: Record<string, any> = {};
+  defaultConfig: IConfigField[] = [];
 
   @IsBoolean()
   @IsOptional()

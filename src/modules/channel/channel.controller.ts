@@ -14,6 +14,7 @@ import type {
   IChannelService,
 } from '@/modules/channel/interfaces/channel.interface';
 import type { ValidatedRequest } from '@/common/interfaces/validation.interface';
+import { Types } from 'mongoose';
 
 export class ChannelController
   extends BaseController
@@ -166,11 +167,13 @@ export class ChannelController
         ? parseInt(queryParams.limit, 10)
         : PAGINATION.DEFAULT_LIMIT;
       const status = queryParams.status;
+      const projectId = queryParams.projectId;
 
       const result = await this.channelService.getAllChannels(
         page,
         limit,
         status,
+        projectId,
       );
 
       logger.debug('Channels retrieved successfully', {
@@ -221,6 +224,46 @@ export class ChannelController
       this.sendError(
         res,
         'Failed to retrieve active channels',
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        err,
+      );
+    }
+  };
+
+  public getChannelsByProjectId = async (
+    req: Request<{ projectId: string }>,
+    res: Response,
+  ): Promise<void> => {
+    try {
+      const { projectId } = req.params;
+      logger.debug('Get channels by project ID request received', {
+        projectId,
+      });
+
+      if (!Types.ObjectId.isValid(projectId)) {
+        this.sendBadRequest(res, 'Invalid project ID format');
+        return;
+      }
+
+      const channels =
+        await this.channelService.getChannelsByProjectId(projectId);
+
+      logger.debug('Channels retrieved successfully', {
+        projectId,
+        count: channels.length,
+      });
+      this.sendSuccess(res, channels, 'Channels retrieved successfully');
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.error('Failed to get channels by project ID:', {
+        error: err.message,
+        stack: err.stack,
+        projectId: req.params.projectId,
+      });
+
+      this.sendError(
+        res,
+        'Failed to retrieve channels',
         HTTP_STATUS.INTERNAL_SERVER_ERROR,
         err,
       );

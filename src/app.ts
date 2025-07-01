@@ -33,8 +33,12 @@ import productRoutes from '@/modules/product/product.routes';
 import utilityRoutes from '@/modules/utility/utility.routes';
 import projectRoutes from '@/modules/project/project.routes';
 import moduleRoutes from '@/modules/module/module.routes';
+import resourceCenterRoutes from '@/modules/resourceCenter/resource-center.routes';
+import moduleConfigRoutes from '@/modules/module-config/module-config.routes';
+import resourceCenterMasterRoutes from '@/modules/resourceMaster/resource-center-master.routes';
+import notificationRoutes from '@/modules/notification/notification.routes';
+import accessControlRoutes from '@/modules/accessControl/access-control.routes';
 import cookieParser from 'cookie-parser';
-
 // Session constants
 const SECONDS_PER_MINUTE = 60;
 const MINUTES_PER_HOUR = 60;
@@ -68,7 +72,8 @@ export class App {
   private initializeMiddlewares(): void {
     this.app.use(
       cors({
-        origin: this.config.corsOrigin ?? '*',
+        origin: this.config.corsOrigin ?? '* ',
+        // ['http://localhost:5173'],
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
         credentials: true,
       }),
@@ -78,28 +83,40 @@ export class App {
     this.app.use(express.urlencoded({ extended: true }));
     this.app.use(cookieParser());
 
-    this.app.use(
-      session({
-        secret: this.SESSION_SECRET,
-        resave: false,
-        saveUninitialized: false,
-        store: MongoStore.create({
-          mongoUrl: this.config.database.uri,
-          dbName: this.config.database.dbName,
-          collectionName: 'sessions',
-          ttl: ONE_DAY_IN_SECONDS,
-          autoRemove: 'interval',
-          autoRemoveInterval: TEN_MINUTES,
-          touchAfter: ONE_DAY_IN_SECONDS,
+    // Skip session store in test environment
+    if (process.env.NODE_ENV === 'test') {
+      this.app.use(
+        session({
+          secret: this.SESSION_SECRET,
+          resave: false,
+          saveUninitialized: false,
+          store: new session.MemoryStore(),
         }),
-        cookie: {
-          secure: process.env.NODE_ENV === 'production',
-          httpOnly: true,
-          maxAge: ONE_DAY_IN_MS,
-          sameSite: 'lax',
-        },
-      }),
-    );
+      );
+    } else {
+      this.app.use(
+        session({
+          secret: this.SESSION_SECRET,
+          resave: false,
+          saveUninitialized: false,
+          store: MongoStore.create({
+            mongoUrl: this.config.database.uri,
+            dbName: this.config.database.dbName,
+            collectionName: 'sessions',
+            ttl: ONE_DAY_IN_SECONDS,
+            autoRemove: 'interval',
+            autoRemoveInterval: TEN_MINUTES,
+            touchAfter: ONE_DAY_IN_SECONDS,
+          }),
+          cookie: {
+            secure: process.env.NODE_ENV === 'production',
+            httpOnly: true,
+            maxAge: ONE_DAY_IN_MS,
+            sameSite: 'lax',
+          },
+        }),
+      );
+    }
   }
 
   private initializePassport(): void {
@@ -140,13 +157,17 @@ export class App {
     this.app.use('/api/leads', leadRoutes);
     this.app.use('/api/provinces', provinceRoutes);
     this.app.use('/api/business-commitments', businessCommitmentRoutes);
-    this.app.use('/api/aobDocumentMaster', aobRoutes);
     this.app.use('/api/aob', aobRoutes);
     this.app.use('/api/product-categories', productCategoryRoutes);
     this.app.use('/api/products', productRoutes);
     this.app.use('/api/utility', utilityRoutes);
     this.app.use('/api/projects', projectRoutes);
     this.app.use('/api/modules', moduleRoutes);
+    this.app.use('/api/resourceCenter', resourceCenterRoutes);
+    this.app.use('/api/module-configs', moduleConfigRoutes);
+    this.app.use('/api/resource-center-master', resourceCenterMasterRoutes);
+    this.app.use('/api/notifications', notificationRoutes);
+    this.app.use('/api/access-controls', accessControlRoutes);
 
     this.app.use('/health/database', (req: Request, res: Response) => {
       const health = this.databaseProvider.getHealth();

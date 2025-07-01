@@ -1,12 +1,6 @@
 import { Type } from 'class-transformer';
-import {
-  IsString,
-  IsOptional,
-  IsArray,
-  IsBoolean,
-  IsObject,
-} from 'class-validator';
-import type { IModule } from '@/models/module.model';
+import { IsString, IsOptional, IsArray, IsBoolean } from 'class-validator';
+import type { IModule, IConfigField } from '@/models/module.model';
 
 export class ModuleResponseDto {
   @IsString()
@@ -22,8 +16,8 @@ export class ModuleResponseDto {
   @IsOptional()
   description?: string;
 
-  @IsObject()
-  defaultConfig: Record<string, unknown> = {};
+  @IsArray()
+  defaultConfig: IConfigField[] = [];
 
   @IsBoolean()
   isActive: boolean = true;
@@ -55,7 +49,13 @@ export class ModuleResponseDto {
     this.name = module.name;
     this.code = module.code;
     this.description = module.description;
-    this.defaultConfig = module.defaultConfig ?? {};
+    this.defaultConfig = module.defaultConfig ?? [
+      {
+        fieldName: 'test',
+        fieldType: 'string',
+        values: ['test'],
+      },
+    ];
     this.isActive = module.isActive ?? true;
     this.isCore = module.isCore ?? false;
     this.version = module.version ?? '1.0.0';

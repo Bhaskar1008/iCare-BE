@@ -11,6 +11,7 @@ import type {
 import { AuthResponseDto } from './dto/auth-response.dto';
 import logger from '@/common/utils/logger';
 import { AuthException } from '@/common/exceptions/auth.exception';
+import mongoose from 'mongoose';
 
 export class AuthService implements IAuthService {
   private readonly JWT_SECRET: Secret;
@@ -45,7 +46,13 @@ export class AuthService implements IAuthService {
         throw new AuthException('Invalid email or password');
       }
 
-      const tokens = this.generateTokens(user);
+      const tokens = this.generateTokens(
+        user,
+        undefined,
+        undefined,
+        undefined,
+        this.safeProjectIdToString(user.projectId),
+      );
 
       user.lastLoginAt = new Date();
       user.refreshToken = tokens.refreshToken;
@@ -72,22 +79,42 @@ export class AuthService implements IAuthService {
     }
   }
 
+  private safeProjectIdToString(
+    projectId: IProject | mongoose.Types.ObjectId | undefined,
+  ): string | undefined {
+    if (!projectId) return undefined;
+    if (typeof projectId === 'string') return projectId;
+    if (projectId instanceof mongoose.Types.ObjectId)
+      return projectId.toString();
+    if (typeof projectId === 'object' && projectId._id)
+      return projectId._id.toString();
+    return undefined;
+  }
+
   public async generateTokensForUser(
     user: IUser,
     channelId?: string,
+    roleId?: string,
+    roleName?: string,
+    _projectId?: string,
   ): Promise<{
     accessToken: string;
     refreshToken: string;
     projects?: IProject[];
   }> {
     try {
-      const tokens = this.generateTokens(user, channelId);
+      const tokens = this.generateTokens(
+        user,
+        channelId,
+        roleId,
+        roleName,
+        this.safeProjectIdToString(user.projectId),
+      );
 
       await UserModel.findByIdAndUpdate(user._id, {
         lastLoginAt: new Date(),
         refreshToken: tokens.refreshToken,
       });
-
       // Fetch project information based on user role
       const projects = await this.fetchProjectsForUser(user);
 
@@ -140,7 +167,13 @@ export class AuthService implements IAuthService {
         throw new AuthException('Invalid refresh token');
       }
 
-      const tokens = this.generateTokens(user);
+      const tokens = this.generateTokens(
+        user,
+        undefined,
+        undefined,
+        undefined,
+        this.safeProjectIdToString(user.projectId),
+      );
 
       user.refreshToken = tokens.refreshToken;
       await user.save();
@@ -188,6 +221,9 @@ export class AuthService implements IAuthService {
   private generateTokens(
     user: IUser,
     channelId?: string,
+    roleId?: string,
+    roleName?: string,
+    projectId?: string,
   ): {
     accessToken: string;
     refreshToken: string;
@@ -197,6 +233,9 @@ export class AuthService implements IAuthService {
       email: user.email,
       role: user.role,
       ...(channelId && { channelId }),
+      ...(roleId && { roleId }),
+      ...(roleName && { roleName }),
+      ...(projectId && { projectId }),
     };
 
     // Handle expiresIn type conversion for JWT sign

@@ -94,6 +94,20 @@ const authController = new AuthController();
  *         refreshToken:
  *           type: string
  *           description: JWT refresh token
+ *
+ *     AgentAuthResponse:
+ *       type: object
+ *       properties:
+ *         agent:
+ *           $ref: '#/components/schemas/AgentResponse'
+ *         accessToken:
+ *           type: string
+ *           description: JWT access token
+ *         projects:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/ProjectResponse'
+ *           description: List of projects the agent has access to
  */
 
 /**
@@ -280,7 +294,7 @@ router.post('/agent/login', async (req, res) => {
  *                 - type: object
  *                   properties:
  *                     data:
- *                       $ref: '#/components/schemas/AuthResponse'
+ *                       $ref: '#/components/schemas/AgentAuthResponse'
  *       400:
  *         description: Bad request - Missing required fields
  *       401:

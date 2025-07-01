@@ -5,7 +5,7 @@ export interface IBaseModel extends Document {
   createdAt: Date;
   updatedAt: Date;
   isDeleted?: boolean;
-  deletedAt?: Date;
+  deletedAt?: Date | null;
 }
 
 export interface ITimestamps {

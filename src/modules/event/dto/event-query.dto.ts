@@ -36,4 +36,19 @@ export class EventQueryDto {
     | 'COMPLETED'
     | 'RESCHEDULED'
     | 'IN_PROGRESS';
+
+  @IsOptional()
+  startDateTime?: string;
+
+  @IsOptional()
+  endDateTime?: string;
+
+  @IsOptional()
+  createdBy?: string;
+
+  @IsOptional()
+  eventWith?: string;
+
+  @IsOptional()
+  type?: string;
 }

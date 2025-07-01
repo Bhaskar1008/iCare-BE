@@ -12,6 +12,7 @@ import {
   IsDateString,
   Min,
   Max,
+  ValidateIf,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { VALIDATION } from '@/common/constants/http-status.constants';
@@ -31,8 +32,12 @@ export class CreateAgentDto {
   @IsNotEmpty({ message: 'Designation ID is required' })
   designationId!: string;
 
+  @IsOptional()
+  @IsMongoId({ message: 'Project ID must be a valid ID' })
+  projectId?: string;
+
+  @IsOptional()
   @IsString({ message: 'Agent code must be a string' })
-  @IsNotEmpty({ message: 'Agent code is required' })
   @MaxLength(VALIDATION.MAX_CODE_LENGTH, {
     message: `Agent code cannot exceed ${VALIDATION.MAX_CODE_LENGTH} characters`,
   })
@@ -42,7 +47,11 @@ export class CreateAgentDto {
   @Transform(({ value }: { value: string }) =>
     typeof value === 'string' ? value.trim().toUpperCase() : value,
   )
-  agentCode!: string;
+  agentCode?: string;
+
+  @IsOptional()
+  @IsBoolean({ message: 'Generate agent code flag must be a boolean' })
+  generateAgentCode?: boolean;
 
   @IsOptional()
   @IsString({ message: 'Employee ID must be a string' })
@@ -131,4 +140,18 @@ export class CreateAgentDto {
   @IsOptional()
   @IsMongoId({ message: 'Reporting manager ID must be a valid ID' })
   reportingManagerId?: string;
+
+  // Custom validation: Either agentCode or generateAgentCode+projectId must be provided
+  @ValidateIf(o => !o.agentCode && !o.generateAgentCode)
+  @IsNotEmpty({
+    message: 'Either agentCode or generateAgentCode must be provided',
+  })
+  validateAgentCodeRequirement?: string;
+
+  // Custom validation: If generateAgentCode is true, projectId is required
+  @ValidateIf(o => o.generateAgentCode === true && !o.projectId)
+  @IsNotEmpty({
+    message: 'Project ID is required when generating agent code automatically',
+  })
+  validateProjectIdRequirement?: string;
 }

@@ -13,6 +13,7 @@ import { AgentModel } from '@/models/agent.model';
 import { Types } from 'mongoose';
 import { LeadHistory } from '@/models/lead-history.model';
 import type { ILeadHistory } from '@/models/lead-history.model';
+import { LeadStatusService } from './services/lead-status.service';
 
 interface StatusCount {
   _id: string;
@@ -56,6 +57,13 @@ interface HistoryChange {
 }
 
 class LeadService extends BaseService {
+  private leadStatusService: LeadStatusService;
+
+  constructor() {
+    super();
+    this.leadStatusService = new LeadStatusService();
+  }
+
   private async verifyUsers(userIds: Types.ObjectId[]): Promise<void> {
     const agents = await AgentModel.find({
       _id: { $in: userIds },
@@ -101,12 +109,42 @@ class LeadService extends BaseService {
         ),
       );
 
-      // Determine initial lead status
-      const status = determineLeadStatus(
-        data.leadProgress as LeadProgress,
-        data.leadDisposition as LeadDisposition,
-        data.leadSubDisposition as LeadSubDisposition,
-      );
+      // Determine lead status based on module configuration if projectId and moduleId are provided
+      let status;
+      if (data.projectId && data.moduleId && data.leadProgress) {
+        const bucket = await this.leadStatusService.determineLeadStatus(
+          data.projectId.toString(),
+          data.moduleId.toString(),
+          data.leadProgress,
+          data.leadDisposition,
+          data.leadSubDisposition,
+        );
+
+        if (bucket) {
+          status = {
+            id: new Types.ObjectId().toString(),
+            name: bucket,
+            updatedAt: new Date(),
+            progress: data.leadProgress,
+            disposition: data.leadDisposition,
+            subDisposition: data.leadSubDisposition,
+          };
+        } else {
+          // Fallback to the old method if module config lookup fails
+          status = determineLeadStatus(
+            data.leadProgress as LeadProgress,
+            data.leadDisposition as LeadDisposition,
+            data.leadSubDisposition as LeadSubDisposition,
+          );
+        }
+      } else {
+        // Use the old method if projectId or moduleId is not provided
+        status = determineLeadStatus(
+          data.leadProgress as LeadProgress,
+          data.leadDisposition as LeadDisposition,
+          data.leadSubDisposition as LeadSubDisposition,
+        );
+      }
 
       // Set the current status and initialize history
       const leadData: Partial<ILead> = {
@@ -170,14 +208,56 @@ class LeadService extends BaseService {
       if (
         data.leadProgress ||
         data.leadDisposition ||
-        data.leadSubDisposition
+        data.leadSubDisposition ||
+        data.projectId ||
+        data.moduleId
       ) {
-        const newStatus = determineLeadStatus(
-          (data.leadProgress ?? lead.leadProgress) as LeadProgress,
-          (data.leadDisposition ?? lead.leadDisposition) as LeadDisposition,
-          (data.leadSubDisposition ??
-            lead.leadSubDisposition) as LeadSubDisposition,
-        );
+        // Use the progress, disposition, and subDisposition from the update data or fall back to existing values
+        const progress = data.leadProgress ?? lead.leadProgress;
+        const disposition = data.leadDisposition ?? lead.leadDisposition;
+        const subDisposition =
+          data.leadSubDisposition ?? lead.leadSubDisposition;
+        const projectId =
+          data.projectId?.toString() ?? lead.projectId?.toString();
+        const moduleId = data.moduleId?.toString() ?? lead.moduleId?.toString();
+
+        let newStatus;
+
+        // If we have projectId and moduleId, try to use the module configuration
+        if (projectId && moduleId && progress) {
+          const bucket = await this.leadStatusService.determineLeadStatus(
+            projectId,
+            moduleId,
+            progress,
+            disposition,
+            subDisposition,
+          );
+
+          if (bucket) {
+            newStatus = {
+              id: new Types.ObjectId().toString(),
+              name: bucket,
+              updatedAt: new Date(),
+              progress,
+              disposition,
+              subDisposition,
+            };
+          } else {
+            // Fallback to the old method if module config lookup fails
+            newStatus = determineLeadStatus(
+              progress as LeadProgress,
+              disposition as LeadDisposition,
+              subDisposition as LeadSubDisposition,
+            );
+          }
+        } else {
+          // Use the old method if projectId or moduleId is not available
+          newStatus = determineLeadStatus(
+            progress as LeadProgress,
+            disposition as LeadDisposition,
+            subDisposition as LeadSubDisposition,
+          );
+        }
 
         // Update current status and add to history
         data.currentLeadStatus = newStatus;
@@ -620,6 +700,65 @@ class LeadService extends BaseService {
         totalPages: Math.ceil(total / limit),
       };
     } catch (error) {
+      throw new BadRequestException((error as Error).message);
+    }
+  }
+
+  public async getLeadsByCreator(
+    createdBy: string,
+    page = 1,
+    limit = 10,
+  ): Promise<PaginatedResponse<ILead>> {
+    try {
+      // Validate createdBy is a valid ObjectId
+      if (!Types.ObjectId.isValid(createdBy)) {
+        throw new BadRequestException('Invalid creator ID format');
+      }
+
+      const query = { createdBy: new Types.ObjectId(createdBy) };
+      const skip = (page - 1) * limit;
+
+      // Execute count and find queries in parallel
+      const [total, leads] = await Promise.all([
+        Lead.countDocuments(query),
+        Lead.find(query)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit)
+          .populate([
+            {
+              path: 'allocatedTo',
+              select: 'firstName lastName email agentCode',
+            },
+            {
+              path: 'allocatedBy',
+              select: 'firstName lastName email agentCode',
+            },
+            {
+              path: 'createdBy',
+              select: 'firstName lastName email agentCode',
+            },
+          ]),
+      ]);
+
+      if (total === 0) {
+        throw new NotFoundException('No leads found for this creator');
+      }
+
+      return {
+        data: leads,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      };
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
       throw new BadRequestException((error as Error).message);
     }
   }

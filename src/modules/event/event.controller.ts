@@ -1,13 +1,14 @@
 import type { Request, Response } from 'express';
 import { BaseController } from '@/controllers/base.controller';
 import { EventService } from './event.service';
-import type { IEventController } from './interfaces/event.interface';
+import type {
+  IEventController,
+  IEventFilter,
+} from './interfaces/event.interface';
 import { LocationService } from '../location/location.service';
 import logger from '@/common/utils/logger';
 import type { CreateEventDto } from './dto/create-event.dto';
 import type { UpdateEventDto } from './dto/update-event.dto';
-
-// Remove this interface as we'll use proper error handling
 
 export class EventController
   extends BaseController
@@ -70,7 +71,33 @@ export class EventController
 
   public async getAllEvents(req: Request, res: Response): Promise<void> {
     try {
-      const events = await this.eventService.getAllEvents(req.query);
+      const {
+        status,
+        startDateTime,
+        endDateTime,
+        createdBy,
+        eventWith,
+        eventSubtype,
+        type,
+        page = '1',
+        limit = '10',
+      } = req.query;
+
+      const filter = {
+        status: status as string,
+        startDateTime: startDateTime as string,
+        endDateTime: endDateTime as string,
+        createdBy: createdBy as string,
+        eventWith: eventWith as string,
+        eventSubtype: eventSubtype as string,
+        type: type as string,
+        page: parseInt(page as string, 10),
+        limit: parseInt(limit as string, 10),
+      };
+
+      const events = await this.eventService.getAllEvents(
+        filter as IEventFilter,
+      );
       this.sendSuccess(res, events);
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));

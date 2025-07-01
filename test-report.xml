@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testExecutions version="1">
+  <file path="C:\IortaTechNxt\Salesverse\salesverse-be\src\modules\agent\__tests__\agent.service.test.ts">
+    <testCase name="AgentService - All Methods Coverage should handle when projectId is provided in createAgent" duration="11"/>
+    <testCase name="AgentService - All Methods Coverage should handle when projectId is not provided in createAgent" duration="4"/>
+    <testCase name="AgentService - All Methods Coverage should use provided agentStatus when specified in createAgent" duration="5"/>
+    <testCase name="AgentService - All Methods Coverage should default to &quot;active&quot; when agentStatus is not provided in createAgent" duration="3"/>
+    <testCase name="AgentService - All Methods Coverage should default to &quot;active&quot; when agentStatus is null in createAgent" duration="6"/>
+    <testCase name="AgentService - All Methods Coverage should convert joiningDate to Date when provided in createAgent" duration="3"/>
+    <testCase name="AgentService - All Methods Coverage should set joiningDate to undefined when not provided in createAgent" duration="2"/>
+    <testCase name="AgentService - All Methods Coverage should include targetAmount when provided in createAgent" duration="2"/>
+    <testCase name="AgentService - All Methods Coverage should handle targetAmount when not provided in createAgent" duration="6"/>
+    <testCase name="AgentService - All Methods Coverage should use provided isTeamLead value when true in createAgent" duration="3"/>
+    <testCase name="AgentService - All Methods Coverage should default to false when isTeamLead is not provided in createAgent" duration="9"/>
+    <testCase name="AgentService - All Methods Coverage should convert teamLeadId to ObjectId when provided in createAgent" duration="4"/>
+    <testCase name="AgentService - All Methods Coverage should set teamLeadId to undefined when not provided in createAgent" duration="3"/>
+    <testCase name="AgentService - All Methods Coverage should convert reportingManagerId to ObjectId when provided in createAgent" duration="3"/>
+    <testCase name="AgentService - All Methods Coverage should throw error when neither agentCode nor generateAgentCode with projectId is provided in createAgent" duration="24"/>
+    <testCase name="AgentService - All Methods Coverage should validate provided agentCode for uniqueness in createAgent" duration="5"/>
+    <testCase name="AgentService - All Methods Coverage should throw error when provided agentCode is not unique in createAgent" duration="3"/>
+    <testCase name="AgentService - All Methods Coverage should handle repository creation errors gracefully in createAgent" duration="8"/>
+    <testCase name="AgentService - All Methods Coverage should return agent when found and not deleted in getAgentById" duration="3"/>
+    <testCase name="AgentService - All Methods Coverage should return null when agent not found in getAgentById" duration="3"/>
+    <testCase name="AgentService - All Methods Coverage should return null when agent is deleted in getAgentById" duration="11"/>
+    <testCase name="AgentService - All Methods Coverage should handle repository errors in getAgentById" duration="2"/>
+    <testCase name="AgentService - All Methods Coverage should return agent when found by code in getAgentByCode" duration="3"/>
+    <testCase name="AgentService - All Methods Coverage should return null when agent not found by code in getAgentByCode" duration="5"/>
+    <testCase name="AgentService - All Methods Coverage should handle repository errors in getAgentByCode" duration="2"/>
+    <testCase name="AgentService - All Methods Coverage should return paginated agents with default parameters in getAllAgents" duration="3"/>
+    <testCase name="AgentService - All Methods Coverage should return paginated agents with custom parameters in getAllAgents" duration="4"/>
+    <testCase name="AgentService - All Methods Coverage should handle repository errors in getAllAgents" duration="6"/>
+    <testCase name="AgentService - All Methods Coverage should return all active agents in getActiveAgents" duration="2"/>
+    <testCase name="AgentService - All Methods Coverage should handle repository errors in getActiveAgents" duration="2"/>
+    <testCase name="AgentService - All Methods Coverage should return agents for given channel ID in getAgentsByChannelId" duration="3"/>
+    <testCase name="AgentService - All Methods Coverage should handle repository errors in getAgentsByChannelId" duration="5"/>
+    <testCase name="AgentService - All Methods Coverage should return agents for given project ID in getAgentsByProjectId" duration="6"/>
+    <testCase name="AgentService - All Methods Coverage should handle repository errors in getAgentsByProjectId" duration="3"/>
+    <testCase name="AgentService - All Methods Coverage should return agents for given user ID in getAgentsByUserId" duration="6"/>
+    <testCase name="AgentService - All Methods Coverage should handle repository errors in getAgentsByUserId" duration="2"/>
+    <testCase name="AgentService - All Methods Coverage should return hierarchies when only agentId is provided in getAgentHierarchyInfo" duration="3"/>
+    <testCase name="AgentService - All Methods Coverage should return agents when hierarchyId and channelId are provided in getAgentHierarchyInfo" duration="2"/>
+    <testCase name="AgentService - All Methods Coverage should handle agent not found in getAgentHierarchyInfo" duration="3"/>
+    <testCase name="AgentService - All Methods Coverage should handle invalid designation ID format in getAgentHierarchyInfo" duration="4"/>
+    <testCase name="AgentService - All Methods Coverage should return hierarchies with agents successfully in getAgentHierarchyWithAgents" duration="3"/>
+    <testCase name="AgentService - All Methods Coverage should throw error for invalid agent ID in getAgentHierarchyWithAgents" duration="3"/>
+    <testCase name="AgentService - All Methods Coverage should throw error for invalid channel ID in getAgentHierarchyWithAgents" duration="7"/>
+    <testCase name="AgentService - All Methods Coverage should throw error when agent is not found in getAgentHierarchyWithAgents" duration="2"/>
+    <testCase name="AgentService - Additional Edge Cases should handle data extraction utility methods" duration="3"/>
+    <testCase name="AgentService - Additional Edge Cases should handle full name generation" duration="2"/>
+    <testCase name="AgentService - Additional Edge Cases should handle null values in data extraction" duration="2"/>
+    <testCase name="AgentService - Additional Edge Cases should successfully create multiple agents in bulkCreateAgents" duration="8"/>
+    <testCase name="AgentService - Additional Edge Cases should handle missing required fields in bulkCreateAgents" duration="3"/>
+    <testCase name="AgentService - Additional Edge Cases should handle invalid ObjectId formats in bulkCreateAgents" duration="3"/>
+    <testCase name="AgentService - Additional Edge Cases should handle user not found for project in bulkCreateAgents" duration="2"/>
+    <testCase name="AgentService - Additional Edge Cases should handle createAgent errors in bulkCreateAgents" duration="6"/>
+    <testCase name="AgentService - Additional Edge Cases should handle mixed success and failure scenarios in bulkCreateAgents" duration="3"/>
+    <testCase name="AgentService - Additional Edge Cases should handle database connection errors in bulkCreateAgents" duration="3"/>
+    <testCase name="AgentService - Additional Edge Cases should handle empty data array in bulkCreateAgents" duration="2"/>
+    <testCase name="AgentService - Additional Edge Cases should handle generateAgentCode failure in bulkCreateAgents" duration="5"/>
+  </file>
+</testExecutions>

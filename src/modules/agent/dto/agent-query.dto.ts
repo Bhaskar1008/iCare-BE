@@ -28,6 +28,10 @@ export class AgentQueryDto {
   @IsMongoId({ message: 'User ID must be a valid ID' })
   userId?: string;
 
+  @IsOptional()
+  @IsMongoId({ message: 'Project ID must be a valid ID' })
+  projectId?: string;
+
   getPage(): number {
     const parsedPage = parseInt(this.page, 10);
     return isNaN(parsedPage) || parsedPage <= 0
@@ -48,5 +52,9 @@ export class AgentQueryDto {
 
   getUserId(): Types.ObjectId | undefined {
     return this.userId ? new Types.ObjectId(this.userId) : undefined;
+  }
+
+  getProjectId(): Types.ObjectId | undefined {
+    return this.projectId ? new Types.ObjectId(this.projectId) : undefined;
   }
 }

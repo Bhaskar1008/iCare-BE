@@ -5,6 +5,11 @@ import type { ILead } from '@/models/lead.model';
 import { HTTP_STATUS } from '@/common/constants/http-status.constants';
 import { BadRequestException } from '@/common/exceptions/bad-request.exception';
 import { Types } from 'mongoose';
+import { NotFoundException } from '@/common/exceptions/not-found.exception';
+import type { ValidatedRequest } from '@/common/interfaces/validation.interface';
+import type { LeadCreatorQueryDto } from './dto/lead-query.dto';
+import { BulkLeadUploadService } from './services/bulk-lead-upload.service';
+import { leadNotificationService } from '../notification/services/lead-notification.service';
 
 type LeadFilter =
   | 'today'
@@ -41,10 +46,19 @@ interface CreateLeadRequest {
   allocatedTo: string;
   allocatedBy: string;
   createdBy: string;
+  projectId?: string;
+  moduleId?: string;
   [key: string]: unknown;
 }
 
 class LeadController extends BaseController {
+  private bulkLeadUploadService: BulkLeadUploadService;
+
+  constructor() {
+    super();
+    this.bulkLeadUploadService = new BulkLeadUploadService();
+  }
+
   public createLead = async (
     req: Request<unknown, unknown, CreateLeadRequest>,
     res: Response,
@@ -85,15 +99,20 @@ class LeadController extends BaseController {
       }
 
       // Convert string IDs to ObjectIds
+      const { projectId, moduleId, ...restBody } = req.body;
       const leadData: Partial<ILead> = {
-        ...req.body,
+        ...restBody,
         allocatedTo: new Types.ObjectId(req.body.allocatedTo),
         allocatedBy: new Types.ObjectId(req.body.allocatedBy),
         createdBy: new Types.ObjectId(req.body.createdBy),
+        ...(projectId && { projectId: new Types.ObjectId(projectId) }),
+        ...(moduleId && { moduleId: new Types.ObjectId(moduleId) }),
       };
 
       // Create lead
       const lead = await leadService.createLead(leadData);
+
+      await leadNotificationService.notifyLeadCreation(lead);
 
       this.sendCreated(res, {
         message: 'Lead created successfully. Please update additional details.',
@@ -141,6 +160,8 @@ class LeadController extends BaseController {
         'allocatedTo',
         'allocatedBy',
         'createdBy',
+        'projectId',
+        'moduleId',
       ] as const;
       type ObjectIdField = (typeof objectIdFields)[number];
 
@@ -155,6 +176,11 @@ class LeadController extends BaseController {
       });
 
       const lead = await leadService.updateLead(id, updateData);
+
+      if (objectIdFields.includes('allocatedTo')) {
+        await leadNotificationService.notifyLeadAllocation(lead);
+      }
+
       this.sendSuccess(res, lead);
     } catch (error) {
       this.handleError(error as Error, res);
@@ -256,6 +282,7 @@ class LeadController extends BaseController {
         new Types.ObjectId(allocatedBy),
       );
 
+      await leadNotificationService.notifyLeadAllocation(lead);
       this.sendSuccess(res, lead);
     } catch (error) {
       this.handleError(error as Error, res);
@@ -375,6 +402,72 @@ class LeadController extends BaseController {
       this.handleError(error as Error, res);
     }
   };
+
+  public getLeadsByCreator = async (
+    req: Request,
+    res: Response,
+  ): Promise<void> => {
+    try {
+      const { createdBy } = req.params;
+      const queryParams = (req as ValidatedRequest<LeadCreatorQueryDto>)
+        .validatedQuery;
+
+      const page = parseInt(queryParams.page ?? '1', 10);
+      const limit = parseInt(queryParams.limit ?? '10', 10);
+
+      if (!createdBy || !Types.ObjectId.isValid(createdBy)) {
+        throw new BadRequestException('Invalid creator ID format');
+      }
+
+      const leads = await leadService.getLeadsByCreator(createdBy, page, limit);
+      this.sendSuccess(res, leads, 'Leads retrieved successfully');
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        this.sendNotFound(res, error.message);
+        return;
+      }
+      if (error instanceof BadRequestException) {
+        this.sendBadRequest(res, error.message);
+        return;
+      }
+      this.handleError(error as Error, res);
+    }
+  };
+
+  public async bulkUpload(req: Request, res: Response): Promise<void> {
+    try {
+      const { projectId, batchSize } = req.body;
+      const fileBuffer = req.file?.buffer;
+
+      if (!fileBuffer) {
+        throw new BadRequestException('No file uploaded');
+      }
+
+      const result = await this.bulkLeadUploadService.processExcelFile(
+        fileBuffer,
+        projectId as string,
+        batchSize as number,
+      );
+
+      res.status(HTTP_STATUS.OK).json({
+        success: true,
+        message: 'Bulk upload processed successfully',
+        data: result,
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        res.status(HTTP_STATUS.BAD_REQUEST).json({
+          success: false,
+          message: error.message,
+        });
+      } else {
+        res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+          success: false,
+          message: 'An unknown error occurred',
+        });
+      }
+    }
+  }
 
   private handleError(error: Error, res: Response): void {
     this.sendError(res, error.message, HTTP_STATUS.INTERNAL_SERVER_ERROR);

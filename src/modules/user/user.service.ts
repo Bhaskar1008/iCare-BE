@@ -327,6 +327,11 @@ export class UserService implements IUserService {
       lastLoginAt: user.lastLoginAt,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
+      projectId:
+        typeof user.projectId === 'string' ||
+        user.projectId instanceof Types.ObjectId
+          ? user.projectId.toString()
+          : undefined,
     };
 
     // Include OTP if it exists in the user document

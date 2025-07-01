@@ -34,6 +34,11 @@ const channelController = new ChannelController();
  *           description: Channel status
  *           default: active
  *           example: "active"
+ *         projectId:
+ *           type: string
+ *           format: mongo-id
+ *           description: ID of the project this channel belongs to
+ *           example: "507f1f77bcf86cd799439011"
  *
  *     ChannelResponse:
  *       type: object
@@ -55,6 +60,10 @@ const channelController = new ChannelController();
  *           enum: [active, inactive]
  *           description: Channel status
  *           example: "active"
+ *         projectId:
+ *           type: string
+ *           description: ID of the project this channel belongs to
+ *           example: "507f1f77bcf86cd799439011"
  *         createdAt:
  *           type: string
  *           format: date-time
@@ -115,6 +124,7 @@ const channelController = new ChannelController();
  *             channelName: "Email Marketing"
  *             channelCode: "EMAIL_MKT"
  *             channelStatus: "active"
+ *             projectId: "507f1f77bcf86cd799439011"
  *     responses:
  *       201:
  *         description: Channel created successfully
@@ -135,6 +145,7 @@ const channelController = new ChannelController();
  *                 channelName: "Email Marketing"
  *                 channelCode: "EMAIL_MKT"
  *                 channelStatus: "active"
+ *                 projectId: "507f1f77bcf86cd799439011"
  *                 createdAt: "2024-01-15T10:30:00.000Z"
  *                 updatedAt: "2024-01-15T10:30:00.000Z"
  *               timestamp: "2024-01-15T10:30:00.000Z"
@@ -208,6 +219,13 @@ router.post(
  *           enum: [active, inactive]
  *         description: Filter channels by status
  *         example: "active"
+ *       - in: query
+ *         name: projectId
+ *         schema:
+ *           type: string
+ *           format: mongo-id
+ *         description: Filter channels by project ID
+ *         example: "507f1f77bcf86cd799439011"
  *     responses:
  *       200:
  *         description: Channels retrieved successfully
@@ -229,12 +247,14 @@ router.post(
  *                     channelName: "Email Marketing"
  *                     channelCode: "EMAIL_MKT"
  *                     channelStatus: "active"
+ *                     projectId: "507f1f77bcf86cd799439011"
  *                     createdAt: "2024-01-15T10:30:00.000Z"
  *                     updatedAt: "2024-01-15T10:30:00.000Z"
  *                   - _id: "507f1f77bcf86cd799439012"
  *                     channelName: "Social Media"
  *                     channelCode: "SOCIAL"
  *                     channelStatus: "active"
+ *                     projectId: "507f1f77bcf86cd799439011"
  *                     createdAt: "2024-01-15T11:00:00.000Z"
  *                     updatedAt: "2024-01-15T11:00:00.000Z"
  *                 pagination:
@@ -295,12 +315,14 @@ router.get(
  *                   channelName: "Email Marketing"
  *                   channelCode: "EMAIL_MKT"
  *                   channelStatus: "active"
+ *                   projectId: "507f1f77bcf86cd799439011"
  *                   createdAt: "2024-01-15T10:30:00.000Z"
  *                   updatedAt: "2024-01-15T10:30:00.000Z"
  *                 - _id: "507f1f77bcf86cd799439012"
  *                   channelName: "Social Media"
  *                   channelCode: "SOCIAL"
  *                   channelStatus: "active"
+ *                   projectId: "507f1f77bcf86cd799439011"
  *                   createdAt: "2024-01-15T11:00:00.000Z"
  *                   updatedAt: "2024-01-15T11:00:00.000Z"
  *               timestamp: "2024-01-15T10:30:00.000Z"
@@ -348,6 +370,7 @@ router.get('/active', channelController.getActiveChannels);
  *                 channelName: "Email Marketing"
  *                 channelCode: "EMAIL_MKT"
  *                 channelStatus: "active"
+ *                 projectId: "507f1f77bcf86cd799439011"
  *                 createdAt: "2024-01-15T10:30:00.000Z"
  *                 updatedAt: "2024-01-15T10:30:00.000Z"
  *               timestamp: "2024-01-15T10:30:00.000Z"
@@ -416,6 +439,7 @@ router.get('/:id', channelController.getChannelById);
  *                 channelName: "Email Marketing"
  *                 channelCode: "EMAIL_MKT"
  *                 channelStatus: "active"
+ *                 projectId: "507f1f77bcf86cd799439011"
  *                 createdAt: "2024-01-15T10:30:00.000Z"
  *                 updatedAt: "2024-01-15T10:30:00.000Z"
  *               timestamp: "2024-01-15T10:30:00.000Z"
@@ -447,5 +471,65 @@ router.get('/:id', channelController.getChannelById);
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get('/code/:code', channelController.getChannelByCode);
+
+/**
+ * @swagger
+ * /api/channels/project/{projectId}:
+ *   get:
+ *     tags: [Channels]
+ *     summary: Get channels by project ID
+ *     description: Retrieves all channels associated with a specific project
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Project's unique identifier (MongoDB ObjectId)
+ *         example: "507f1f77bcf86cd799439011"
+ *     responses:
+ *       200:
+ *         description: Channels retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/ChannelResponse'
+ *             example:
+ *               success: true
+ *               message: "Channels retrieved successfully"
+ *               data:
+ *                 - _id: "507f1f77bcf86cd799439011"
+ *                   channelName: "Email Marketing"
+ *                   channelCode: "EMAIL_MKT"
+ *                   channelStatus: "active"
+ *                   projectId: "507f1f77bcf86cd799439011"
+ *                   createdAt: "2024-01-15T10:30:00.000Z"
+ *                   updatedAt: "2024-01-15T10:30:00.000Z"
+ *               timestamp: "2024-01-15T10:30:00.000Z"
+ *       400:
+ *         description: Bad request - invalid project ID
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               success: false
+ *               message: "Invalid project ID format"
+ *               timestamp: "2024-01-15T10:30:00.000Z"
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.get('/project/:projectId', channelController.getChannelsByProjectId);
 
 export default router;

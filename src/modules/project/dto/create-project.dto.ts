@@ -8,11 +8,13 @@ import {
   ArrayMinSize,
   IsObject,
   IsMongoId,
+  IsNotEmpty,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class ModuleConfig {
   @IsMongoId()
+  @IsNotEmpty()
   moduleId: string = '';
 
   @IsBoolean()
@@ -26,9 +28,11 @@ class ModuleConfig {
 
 export class CreateProjectDto {
   @IsString()
+  @IsNotEmpty()
   projectName: string = '';
 
   @IsString()
+  @IsNotEmpty()
   projectCode: string = '';
 
   @IsString()

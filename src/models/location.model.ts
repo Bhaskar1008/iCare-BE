@@ -7,6 +7,7 @@ export interface ILocation extends Document {
 
   // Physical location properties
   address?: string;
+  province?: string;
   city?: string;
   state?: string;
   country?: string;
@@ -34,6 +35,10 @@ const LocationSchema = new Schema<ILocation>(
 
     // Physical location fields
     address: {
+      type: String,
+      trim: true,
+    },
+    province: {
       type: String,
       trim: true,
     },

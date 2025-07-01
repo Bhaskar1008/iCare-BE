@@ -53,7 +53,7 @@ export class EventRepository extends BaseRepository<IEvent> {
           limit,
           skip,
           sort: { startDateTime: 1 },
-          populate: ['location'],
+          populate: ['location', 'attendees'],
         },
       );
       logger.debug('All events found', { count: events.length });
@@ -72,7 +72,10 @@ export class EventRepository extends BaseRepository<IEvent> {
   public async findById(id: string): Promise<IEvent | null> {
     try {
       logger.debug('Finding event by ID', { id });
-      const event = await this.findById(id);
+      const event = await this.model
+        .findById(id)
+        .populate('location')
+        .populate('attendees');
       logger.debug('Event found by ID', { id, found: !!event });
       return event;
     } catch (error) {
@@ -87,7 +90,10 @@ export class EventRepository extends BaseRepository<IEvent> {
   ): Promise<IEvent | null> {
     try {
       logger.debug('Updating event', { id, updateData });
-      const event = await this.updateById(id, updateData);
+      const event = await this.model
+        .findByIdAndUpdate(id, updateData, { new: true })
+        .populate('location')
+        .populate('attendees');
       logger.debug('Event updated successfully', { id, updated: !!event });
       return event;
     } catch (error) {

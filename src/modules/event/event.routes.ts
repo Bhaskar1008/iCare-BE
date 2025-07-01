@@ -12,8 +12,9 @@ const eventController = new EventController();
  * @swagger
  * /api/events:
  *   post:
- *     summary: Create a new event
  *     tags: [Events]
+ *     summary: Create a new event
+ *     description: Creates a new event with the provided data
  *     requestBody:
  *       required: true
  *       content:
@@ -22,84 +23,107 @@ const eventController = new EventController();
  *             type: object
  *             required:
  *               - title
+ *               - description
  *               - startDateTime
  *               - endDateTime
  *               - createdBy
  *               - location
- *               - isAllDay
+ *               - eventWith
+ *               - eventSubtype
  *             properties:
  *               title:
  *                 type: string
- *                 example: "Team Meeting"
+ *                 description: Event title
+ *                 example: "Demo Meeting"
  *               description:
  *                 type: string
- *                 example: "Weekly team sync meeting"
+ *                 description: Event description
+ *                 example: "Event Type: Training\nEvent With: event_003"
  *               startDateTime:
  *                 type: string
  *                 format: date-time
- *                 example: "2024-03-20T10:00:00Z"
+ *                 description: Event start date and time
+ *                 example: "2025-06-20T04:30:00.000Z"
  *               endDateTime:
  *                 type: string
  *                 format: date-time
- *                 example: "2024-03-20T11:00:00Z"
+ *                 description: Event end date and time
+ *                 example: "2025-06-20T05:30:00.000Z"
+ *               status:
+ *                 type: string
+ *                 enum: [SCHEDULED, CANCELLED, COMPLETED]
+ *                 description: Status of the event
+ *                 example: "SCHEDULED"
  *               createdBy:
  *                 type: string
- *                 format: objectId
- *                 example: "507f1f77bcf86cd799439011"
+ *                 description: ID of the user creating the event
+ *                 example: "68444d60fd3ca4b18e65c51d"
  *               location:
  *                 type: object
  *                 required:
  *                   - type
- *                   - name
  *                 properties:
  *                   type:
  *                     type: string
- *                     enum: [PHYSICAL, VIRTUAL, HYBRID]
+ *                     enum: [PHYSICAL, VIRTUAL]
+ *                     example: "PHYSICAL"
  *                   address:
  *                     type: string
+ *                     example: "No 12 Gandhi Nagar"
  *                   city:
  *                     type: string
+ *                     example: "Mabini"
  *                   state:
  *                     type: string
- *                   country:
- *                     type: string
+ *                     example: "Batangas"
  *                   postalCode:
  *                     type: string
- *                   coordinates:
- *                     type: object
- *                     properties:
- *                       latitude:
- *                         type: number
- *                       longitude:
- *                         type: number
- *                   meetingUrl:
+ *                     example: "600091"
+ *                   country:
  *                     type: string
- *                   meetingId:
- *                     type: string
- *                   meetingPassword:
- *                     type: string
- *                   platform:
- *                     type: string
+ *                     example: "Philippines"
  *               attendees:
  *                 type: array
  *                 items:
  *                   type: string
- *                   format: objectId
- *                 example: ["507f1f77bcf86cd799439013", "507f1f77bcf86cd799439014"]
- *
+ *                 description: Array of attendee IDs
+ *                 example: ["684a6549aa6b6dad66b0e563", "684fff0e3219ee93806c9ff9"]
+ *               eventWith:
+ *                 type: string
+ *                 description: Identifier or name of who the event is with
+ *                 example: "event_003"
+ *               eventSubtype:
+ *                 type: string
+ *                 description: Subtype of the event
+ *                 example: "Follow-up"
+ *               type:
+ *                 type: string
+ *                 description: Type of the event
+ *                 example: "Training"
  *               metadata:
  *                 type: object
- *                 example: {
- *                   "meetingLink": "https://meet.example.com/123",
- *                   "notes": "Bring project updates"
- *                 }
+ *                 description: Additional event metadata
+ *                 example: {}
  *     responses:
  *       201:
  *         description: Event created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Event created successfully"
+ *                 data:
+ *                   $ref: '#/components/schemas/Event'
  *       400:
- *         description: Invalid request body
- *       401:
- *         description: Unauthorized
+ *         description: Bad request - validation error
+ *       500:
+ *         description: Internal server error
  */
 router.post(
   '/',
@@ -152,6 +176,21 @@ router.post(
  *         schema:
  *           type: string
  *         description: Created by of the event
+ *       - in: query
+ *         name: eventWith
+ *         schema:
+ *           type: string
+ *         description: Event with category (e.g., meeting, call)
+ *       - in: query
+ *         name: eventSubtype
+ *         schema:
+ *           type: string
+ *         description: Subtype of the event (e.g., Follow-up, Initial)
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *         description: Type of event (e.g., internal, external)
  *     responses:
  *       200:
  *         description: List of events retrieved successfully
@@ -195,8 +234,9 @@ router.get('/:id', async (req, res) => {
  * @swagger
  * /api/events/{id}:
  *   put:
- *     summary: Update an event by ID
  *     tags: [Events]
+ *     summary: Update an event
+ *     description: Updates an existing event with the provided data
  *     parameters:
  *       - in: path
  *         name: id
@@ -213,68 +253,101 @@ router.get('/:id', async (req, res) => {
  *             properties:
  *               title:
  *                 type: string
+ *                 description: Event title
+ *                 example: "Demo Meeting"
  *               description:
  *                 type: string
+ *                 description: Event description
+ *                 example: "Event Type: Training\nEvent With: event_003"
  *               startDateTime:
  *                 type: string
  *                 format: date-time
+ *                 description: Event start date and time
+ *                 example: "2025-06-20T04:30:00.000Z"
  *               endDateTime:
  *                 type: string
  *                 format: date-time
+ *                 description: Event end date and time
+ *                 example: "2025-06-20T05:30:00.000Z"
  *               location:
- *                 type: object
- *                 required:
- *                   - type
- *                   - name
- *                 properties:
- *                   type:
- *                     type: string
- *                     enum: [PHYSICAL, VIRTUAL]
- *                   address:
- *                     type: string
- *                   city:
- *                     type: string
- *                   state:
- *                     type: string
- *                   country:
- *                     type: string
- *                   postalCode:
- *                     type: string
- *                   coordinates:
- *                     type: object
+ *                 oneOf:
+ *                   - type: string
+ *                     description: Location ID
+ *                     example: "685001938e1124ce538b5f8f"
+ *                   - type: object
  *                     properties:
- *                       latitude:
- *                         type: number
- *                       longitude:
- *                         type: number
- *                   meetingUrl:
- *                     type: string
- *                   meetingId:
- *                     type: string
- *                   meetingPassword:
- *                     type: string
- *                   platform:
- *                     type: string
+ *                       _id:
+ *                         type: string
+ *                         description: Location ID
+ *                         example: "685001938e1124ce538b5f8f"
+ *                       type:
+ *                         type: string
+ *                         enum: [PHYSICAL, VIRTUAL]
+ *                         example: "PHYSICAL"
+ *                       address:
+ *                         type: string
+ *                         example: "No 12 Gandhi Nagar"
+ *                       city:
+ *                         type: string
+ *                         example: "Mabini"
+ *                       state:
+ *                         type: string
+ *                         example: "Batangas"
+ *                       postalCode:
+ *                         type: string
+ *                         example: "600091"
+ *                       country:
+ *                         type: string
+ *                         example: "Philippines"
  *               attendees:
  *                 type: array
  *                 items:
  *                   type: string
- *                   format: objectId
+ *                 description: Array of attendee IDs
+ *                 example: ["684a6549aa6b6dad66b0e563", "684fff0e3219ee93806c9ff9"]
  *               status:
  *                 type: string
  *                 enum: [SCHEDULED, CANCELLED, COMPLETED]
- *
+ *                 description: Event status
+ *                 example: "SCHEDULED"
+ *               eventWith:
+ *                 type: string
+ *                 description: Identifier or name of who the event is with
+ *                 example: "event_003"
+ *               eventSubtype:
+ *                 type: string
+ *                 description: Subtype of the event
+ *                 example: "Follow-up"
+ *               type:
+ *                 type: string
+ *                 description: Type of the event
+ *                 example: "Training"
  *               metadata:
  *                 type: object
+ *                 description: Additional event metadata
+ *                 example: {}
  *     responses:
  *       200:
  *         description: Event updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Event updated successfully"
+ *                 data:
+ *                   $ref: '#/components/schemas/Event'
+ *       400:
+ *         description: Bad request - validation error or invalid event ID
  *       404:
  *         description: Event not found
- *       400:
- *         description: Invalid request body
- *       401:
- *         description: Unauthorized
+ *       500:
+ *         description: Internal server error
  */
 router.put(
   '/:id',
